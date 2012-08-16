@@ -190,6 +190,9 @@ typedef unsigned char nonogram_cell;
 
 
   /******* Miscellaneous *******/
+#define nonogram_puzzlewidth(P) ((const size_t) (P)->width)
+#define nonogram_puzzleheight(P) ((const size_t) (P)->height)
+
 
   extern const char *const nonogram_date;
   extern unsigned long const nonogram_loglevel;

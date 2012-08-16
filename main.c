@@ -1,3 +1,4 @@
+#include "nonogram.h"
 
 /* make puzzle */
 static int make_puzzle(nonogram_puzzle *p)
@@ -30,29 +31,32 @@ int main()
   nonogram_puzzle p;
 
   // set the result grid
-  nonogram_grid g;
+  nonogram_cell* g;
+
+  nonogram_solver c;
 
   //1. verify the puzzle 
 
   // 2. 
-  nonogram_initsolver(&handle.solver);
-  nonogram_setalgo(&handle.solver, c->algo);
-  nonogram_setlog(&handle.solver, handle.logfp, 0, c->loglevel);
-  nonogram_setclient(&handle.solver, &our_client, &handle);
+  nonogram_initsolver(&c);
+  //  nonogram_setalgo(&handle.solver, c->algo);
+  //  nonogram_setlog(&handle.solver, handle.logfp, 0, c->loglevel);
+  //  nonogram_setclient(&handle.solver, &our_client, &handle);
 
   /* now load the puzzle after configuration */
-  nonogram_load(&handle.solver, &handle.puzzle, handle.grid,
-                nonogram_puzzlewidth(&handle.puzzle) *
-                nonogram_puzzleheight(&handle.puzzle));
+  nonogram_load(&c, &p, g,
+                nonogram_puzzlewidth(&p) *
+                nonogram_puzzleheight(&p));
 
-  handle.stop = false;
-  while (!handle.stop &&
-	 nonogram_runsolver_n(&handle.solver,
+  int bstop = false;
+  int tries;
+  while (!bstop &&
+	 nonogram_runsolver_n(&c,
 			      (tries = 1, &tries)) != nonogram_FINISHED)
     ;
 
-  nonogram_termsolver(&handle.solver);
-  nonogram_freegrid(handle.grid);
+    nonogram_termsolver(&c);
+  //  nonogram_freegrid(g);
 
 
 

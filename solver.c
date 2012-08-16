@@ -195,10 +195,10 @@ int nonogram_load(nonogram_solver *c, const nonogram_puzzle *puzzle,
   return 0;
 }
 
-static void colfocus(nonogram_solver *c, int lineno, int v);
-static void rowfocus(nonogram_solver *c, int lineno, int v);
-static void mark1col(nonogram_solver *c, int lineno);
-static void mark1row(nonogram_solver *c, int lineno);
+static void colfocus(nonogram_solver *c, int lineno, int v){};
+static void rowfocus(nonogram_solver *c, int lineno, int v){};
+static void mark1col(nonogram_solver *c, int lineno){};
+static void mark1row(nonogram_solver *c, int lineno){};
 
 static void makeguess(nonogram_solver *c);
 static void findminrect(nonogram_solver *c, struct nonogram_rect *b);
@@ -663,7 +663,7 @@ static void gathersolvers(nonogram_solver *c)
 
 
 
-static void mark(nonogram_solver *c, int from, int to);
+static void mark(nonogram_solver *c, int from, int to){};
 
 static void setupstep(nonogram_solver *c)
 {
@@ -848,7 +848,7 @@ static int redeemstep(nonogram_solver *c)
       break;
     default:
       if (cells.inrange) {
-        redrawrange(c, cells.from, i);
+	//        redrawrange(c, cells.from, i);
         cells.inrange = false;
       }
       if (flags.inrange) {
@@ -858,7 +858,7 @@ static int redeemstep(nonogram_solver *c)
       break;
     }
   if (cells.inrange) {
-    redrawrange(c, cells.from, i);
+    //    redrawrange(c, cells.from, i);
     cells.inrange = false;
   }
   if (flags.inrange) {

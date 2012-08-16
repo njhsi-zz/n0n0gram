@@ -41,6 +41,7 @@ typedef unsigned char nonogram_cell;
 #define nonogram_PRIxSIZE "lx"
 #define nonogram_PRIXSIZE "lX"
 
+  typedef struct nonogram_puzzle nonogram_puzzle;
 
   /******* solver state ******/
 
@@ -74,6 +75,10 @@ typedef unsigned char nonogram_cell;
     nonogram_LINE = 8
   };
 
+  /******* verbose solution *******/
+
+  struct nonogram_point { size_t x, y; };
+  struct nonogram_rect { struct nonogram_point min, max; };
 
 
 
@@ -146,10 +151,7 @@ typedef unsigned char nonogram_cell;
     nonogram_termproc *term; /* terminate line-processing */
   };
 
-  int nonogram_setlinesolver(nonogram_solver *c, nonogram_level,
-			     const char *n,
-			     const struct nonogram_linesuite *, void *conf);
-  int nonogram_setlinesolvers(nonogram_solver *c, nonogram_level levels);
+
   nonogram_level nonogram_getlinesolvers(nonogram_solver *c);
 
 
@@ -264,7 +266,7 @@ typedef unsigned char nonogram_cell;
     unsigned on_row : 1, focus : 1, status : 2, reversed : 1, alloc : 1;
 
     /* logfile */
-    struct nonogram_log log, tmplog;
+
   };
 
   struct nonogram_rule {

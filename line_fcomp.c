@@ -3,7 +3,7 @@
 #include <assert.h>
 
 #include "nonogram.h"
-#include "internal.h"
+
 
 static void prep(void *, const struct nonogram_lim *, struct nonogram_req *);
 static int init(void *, struct nonogram_ws *ws,

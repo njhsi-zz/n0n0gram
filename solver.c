@@ -337,8 +337,7 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
                st->grid + (y - st->editarea.min.y) * w, w);
 
       /* update screen with restored data */
-      if (c->display && c->display->redrawarea)
-        (*c->display->redrawarea)(c->display_data, &st->editarea);
+      //      if (c->display && c->display->redrawarea)        (*c->display->redrawarea)(c->display_data, &st->editarea);
       /* mark rows and cols (from st->editarea) as unflagged */
       c->reversed = false;
       for (y = st->editarea.min.x; y < st->editarea.max.x; y++) {
@@ -347,18 +346,14 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
         /* also restore scores */
         c->colattr[y] = st->colattr[y - st->editarea.min.x];
       }
-      if (c->display && c->display->colmark)
-        (*c->display->colmark)(c->display_data,
-                               st->editarea.min.x, st->editarea.max.x);
+      //      if (c->display && c->display->colmark)        (*c->display->colmark)(c->display_data,                               st->editarea.min.x, st->editarea.max.x);
       for (y = st->editarea.min.y; y < st->editarea.max.y; y++) {
         c->rowflag[y] = false;
 
         /* also restore scores */
         c->rowattr[y] = st->rowattr[y - st->editarea.min.y];
       }
-      if (c->display && c->display->rowmark)
-        (*c->display->rowmark)(c->display_data,
-                               st->editarea.min.y, st->editarea.max.y);
+      //      if (c->display && c->display->rowmark)        (*c->display->rowmark)(c->display_data,                               st->editarea.min.y, st->editarea.max.y);
 
       if (~st->level & nonogram_BOTH) {
         /* make subsequent guess */
@@ -527,12 +522,14 @@ static void makeguess(nonogram_solver *c)
   c->colflag[st->pos.x] = c->levels;
   mark1row(c, st->pos.y);
   mark1col(c, st->pos.x);
+#if 0
   if (c->display && c->display->redrawarea) {
     struct nonogram_rect gp;
     gp.max.x = (gp.min.x = st->pos.x) + 1;
     gp.max.y = (gp.min.y = st->pos.y) + 1;
     (*c->display->redrawarea)(c->display_data, &gp);
   }
+#endif
 }
 
 /* This sets the rectangle *b to the smallest inclusive rectangle that
@@ -688,8 +685,8 @@ static void setupstep(nonogram_solver *c)
   }
   a.rulestep = 1;
   a.fits = &c->fits;
-  c->tmplog = c->log;
-  a.log = &c->tmplog;
+  //  c->tmplog = c->log;
+  //  a.log = &c->tmplog;
   a.result = c->work;
   a.resultstep = 1;
 

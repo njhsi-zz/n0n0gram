@@ -1,3 +1,23 @@
+/*
+ *  Nonolib - Nonogram-solver library
+ *  Copyright (C) 2001,5-7  Steven Simpson
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ *  Contact Steven Simpson <ss@comp.lancs.ac.uk>
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,9 +25,11 @@
 #include <assert.h>
 
 #include "nonogram.h"
+///#include "internal.h"
 
-
-
+#ifndef nonogram_LOGLEVEL
+#define nonogram_LOGLEVEL 1
+#endif
 
 static void makescore(nonogram_lineattr *attr,
 		      const struct nonogram_rule *rule, int len);
@@ -45,6 +67,7 @@ static int nonogram_setlinesolvers(nonogram_solver *c, nonogram_level levels)
 }
 
 
+
 int nonogram_initsolver(nonogram_solver *c)
 {
   /* these can get stuffed; nah, maybe not */
@@ -54,6 +77,13 @@ int nonogram_initsolver(nonogram_solver *c)
 
   /* no puzzle loaded */
   c->puzzle = NULL;
+
+  /* no display */
+  c->display = NULL;
+
+  /* no place to send solutions */
+  c->client = NULL;
+
 
 
   /* no internal workspace */
@@ -74,6 +104,8 @@ int nonogram_initsolver(nonogram_solver *c)
   /* then add the default */
   nonogram_setlinesolvers(c, 1);
   nonogram_setlinesolver(c, 1, "fcomp", &nonogram_fcompsuite, 0);
+
+  c->focus = false;
 
   return 0;
 }
@@ -195,10 +227,10 @@ int nonogram_load(nonogram_solver *c, const nonogram_puzzle *puzzle,
   return 0;
 }
 
-static void colfocus(nonogram_solver *c, int lineno, int v){};
-static void rowfocus(nonogram_solver *c, int lineno, int v){};
-static void mark1col(nonogram_solver *c, int lineno){};
-static void mark1row(nonogram_solver *c, int lineno){};
+static void colfocus(nonogram_solver *c, int lineno, int v);
+static void rowfocus(nonogram_solver *c, int lineno, int v);
+static void mark1col(nonogram_solver *c, int lineno);
+static void mark1row(nonogram_solver *c, int lineno);
 
 static void makeguess(nonogram_solver *c);
 static void findminrect(nonogram_solver *c, struct nonogram_rect *b);
@@ -285,9 +317,9 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     if (c->fits == 0) {
       /* nothing fitted; must be an error */
       c->remcells = -1;
-
     } else {
       int changed;
+
 
       /* update display and count number of changed cells and flags */
       changed = redeemstep(c);
@@ -316,6 +348,7 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
       }
     }
 
+
     /* set state to indicate no line currently chosen */
     c->status = nonogram_EMPTY;
     return nonogram_LINE;
@@ -326,10 +359,11 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     if (st) {
       size_t y, w;
 
-
       /* copy from stack */
       c->remcells = st->remcells;
       c->reminfo = 0;
+
+
 
       w = st->editarea.max.x - st->editarea.min.x;
       for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
@@ -337,7 +371,7 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
                st->grid + (y - st->editarea.min.y) * w, w);
 
       /* update screen with restored data */
-      //      if (c->display && c->display->redrawarea)        (*c->display->redrawarea)(c->display_data, &st->editarea);
+      ///if (c->display && c->display->redrawarea)  (*c->display->redrawarea)(c->display_data, &st->editarea);
       /* mark rows and cols (from st->editarea) as unflagged */
       c->reversed = false;
       for (y = st->editarea.min.x; y < st->editarea.max.x; y++) {
@@ -346,20 +380,21 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
         /* also restore scores */
         c->colattr[y] = st->colattr[y - st->editarea.min.x];
       }
-      //      if (c->display && c->display->colmark)        (*c->display->colmark)(c->display_data,                               st->editarea.min.x, st->editarea.max.x);
+      ///if (c->display && c->display->colmark)  (*c->display->colmark)(c->display_data, st->editarea.min.x, st->editarea.max.x);
       for (y = st->editarea.min.y; y < st->editarea.max.y; y++) {
         c->rowflag[y] = false;
 
         /* also restore scores */
         c->rowattr[y] = st->rowattr[y - st->editarea.min.y];
       }
-      //      if (c->display && c->display->rowmark)        (*c->display->rowmark)(c->display_data,                               st->editarea.min.y, st->editarea.max.y);
+      /// if (c->display && c->display->rowmark)        (*c->display->rowmark)(c->display_data,st->editarea.min.y, st->editarea.max.y);
 
       if (~st->level & nonogram_BOTH) {
         /* make subsequent guess */
         makeguess(c);
       } else {
         /* pull from stack */
+
         c->stack = st->next;
         free(st->grid);
         free(st->rowattr);
@@ -380,9 +415,11 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
 
     /* set up context for solving a row or column */
     if (c->on_row) {
+
       c->editarea.max.y = (c->editarea.min.y = c->lineno) + 1;
       rowfocus(c, c->lineno, true);
     } else {
+
       c->editarea.max.x = (c->editarea.min.x = c->lineno) + 1;
       colfocus(c, c->lineno, true);
     }
@@ -391,6 +428,9 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     return nonogram_UNFINISHED;
   } else if (c->remcells == 0) {
     /* no remaining lines or cells; no error - must be solution */
+
+    /// if (c->client && c->client->present) (*c->client->present)(c->client_data);
+    printf("client printit\n");
 
     c->remcells = -1;
     return c->stack ? nonogram_FOUND : nonogram_FINISHED;
@@ -421,6 +461,7 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
 #endif
     w = st->editarea.max.x - st->editarea.min.x;
     h = st->editarea.max.y - st->editarea.min.y;
+
 
     /* copy specified area */
     st->grid = malloc(w * h * sizeof(nonogram_cell));
@@ -523,6 +564,7 @@ static void makeguess(nonogram_solver *c)
   mark1row(c, st->pos.y);
   mark1col(c, st->pos.x);
 #if 0
+  ///
   if (c->display && c->display->redrawarea) {
     struct nonogram_rect gp;
     gp.max.x = (gp.min.x = st->pos.x) + 1;
@@ -574,7 +616,6 @@ static void findminrect(nonogram_solver *c, struct nonogram_rect *b)
     b->max.x = x;
   }
 
-
 }
 
 static void findeasiest(nonogram_solver *c)
@@ -624,7 +665,27 @@ static void makescore(nonogram_lineattr *attr,
   }
 }
 
+static void colfocus(nonogram_solver *c, int lineno, int v)
+{
+  c->focus = v;
+  ///if (c->display && c->display->colfocus)  (*c->display->colfocus)(c->display_data, lineno, v);
+}
 
+static void rowfocus(nonogram_solver *c, int lineno, int v)
+{
+  c->focus = v;
+  ///  if (c->display && c->display->rowfocus)    (*c->display->rowfocus)(c->display_data, lineno, v);
+}
+
+static void mark1col(nonogram_solver *c, int lineno)
+{
+  ///  if (c->display && c->display->colmark)    (*c->display->colmark)(c->display_data, lineno, lineno + 1);
+}
+
+static void mark1row(nonogram_solver *c, int lineno)
+{
+  ///  if (c->display && c->display->rowmark)    (*c->display->rowmark)(c->display_data, lineno, lineno + 1);
+}
 
 static void gathersolvers(nonogram_solver *c)
 {
@@ -662,8 +723,8 @@ static void gathersolvers(nonogram_solver *c)
 }
 
 
-
-static void mark(nonogram_solver *c, int from, int to){};
+static void redrawrange(nonogram_solver *c, int from, int to);
+static void mark(nonogram_solver *c, int from, int to);
 
 static void setupstep(nonogram_solver *c)
 {
@@ -685,8 +746,7 @@ static void setupstep(nonogram_solver *c)
   }
   a.rulestep = 1;
   a.fits = &c->fits;
-  //  c->tmplog = c->log;
-  //  a.log = &c->tmplog;
+  ///  a.log = &c->tmplog;
   a.result = c->work;
   a.resultstep = 1;
 
@@ -848,7 +908,7 @@ static int redeemstep(nonogram_solver *c)
       break;
     default:
       if (cells.inrange) {
-	//        redrawrange(c, cells.from, i);
+        redrawrange(c, cells.from, i);
         cells.inrange = false;
       }
       if (flags.inrange) {
@@ -858,7 +918,7 @@ static int redeemstep(nonogram_solver *c)
       break;
     }
   if (cells.inrange) {
-    //    redrawrange(c, cells.from, i);
+    redrawrange(c, cells.from, i);
     cells.inrange = false;
   }
   if (flags.inrange) {
@@ -875,6 +935,59 @@ static int redeemstep(nonogram_solver *c)
   return changed;
 }
 
+static void mark(nonogram_solver *c, int from, int to)
+{
+#if 0
+  ///
+  if (c->display) {
+    if (c->on_row) {
+      if (c->display->colmark) {
+        if (c->reversed) {
+          int temp = c->puzzle->height - from;
+          from = c->puzzle->height - to;
+          to = temp;
+        }
+        (*c->display->colmark)(c->display_data, from, to);
+      }
+    } else {
+      if (c->display->rowmark) {
+        if (c->reversed) {
+          int temp = c->puzzle->width - from;
+          from = c->puzzle->width - to;
+          to = temp;
+        }
+        (*c->display->rowmark)(c->display_data, from, to);
+      }
+    }
+  }
+#endif
+}
 
+static void redrawrange(nonogram_solver *c, int from, int to)
+{
+  ///  if (!c->display || !c->display->redrawarea) return;
+
+
+  if (c->on_row) {
+    if (c->reversed) {
+      c->editarea.max.x = c->puzzle->width - from;
+      c->editarea.min.x = c->puzzle->width - to;
+    } else {
+      c->editarea.min.x = from;
+      c->editarea.max.x = to;
+    }
+  } else {
+    if (c->reversed) {
+      c->editarea.max.y = c->puzzle->height - from;
+      c->editarea.min.y = c->puzzle->height - to;
+    } else {
+      c->editarea.min.y = from;
+      c->editarea.max.y = to;
+    }
+  }
+
+  ///  (*c->display->redrawarea)(c->display_data, &c->editarea);
+
+}
 
 const char *const nonogram_date = __DATE__;

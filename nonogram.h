@@ -128,7 +128,7 @@ typedef unsigned char nonogram_cell;
 
   struct nonogram_initargs {
     int *fits;
-    struct nonogram_log *log;
+    ///    struct nonogram_log *log;
     const nonogram_sizetype *rule;
     const nonogram_cell *line;
     nonogram_cell *result;

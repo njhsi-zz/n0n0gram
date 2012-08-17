@@ -43,6 +43,7 @@ typedef unsigned char nonogram_cell;
 
   typedef struct nonogram_puzzle nonogram_puzzle;
 
+
   /******* solver state ******/
 
   typedef struct nonogram_solver nonogram_solver;
@@ -283,6 +284,16 @@ typedef unsigned char nonogram_cell;
     size_t width, height;
 
   };
+
+int nonogram_makepuzzle(nonogram_puzzle *p, const nonogram_cell *g,
+			size_t w, size_t h);
+
+nonogram_cell *loadgrid(size_t *width, size_t *height,
+			  FILE *fp, char solid, char dot);
+
+#define nonogram_makegrid(w,h) \
+  ((nonogram_cell *) malloc((w)*(h)*sizeof(nonogram_cell)))
+
 
 #define nonogram_NULLPUZZLE { 0, 0, 0, 0, 0 }
 

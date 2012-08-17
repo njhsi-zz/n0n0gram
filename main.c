@@ -1,5 +1,25 @@
 #include "nonogram.h"
 
+
+
+/* picture file format: line break is must.  */
+static int make_puzzle_by_p(const char* inf, nonogram_puzzle *p)
+{
+
+  p->width = p->height = 0;
+
+  FILE *fin = fopen(inf, "r");
+
+  const char S='#', D='-';
+
+  size_t w=0, h=0;
+
+  nonogram_cell *g = loadgrid(&w, &h, fin, S, D);
+
+  nonogram_makepuzzle(p,g,w,h);
+
+}
+
 /* make puzzle */
 static int make_puzzle(nonogram_puzzle *p)
 {
@@ -71,7 +91,8 @@ int main()
   nonogram_puzzle p;
 
 
-  make_puzzle(&p);
+  //  make_puzzle(&p);
+  make_puzzle_by_p("pic.txt",&p);
 
   // set the result grid
   nonogram_cell* g = (nonogram_cell*)malloc(p.width*p.height*sizeof(nonogram_cell)) ;
@@ -84,9 +105,6 @@ int main()
 
   // 2. 
   nonogram_initsolver(&c);
-  //  nonogram_setalgo(&handle.solver, c->algo);
-  //  nonogram_setlog(&handle.solver, handle.logfp, 0, c->loglevel);
-  //  nonogram_setclient(&handle.solver, &our_client, &handle);
 
   /* now load the puzzle after configuration */
   nonogram_load(&c, &p, g,
@@ -102,7 +120,7 @@ int main()
 
     nonogram_termsolver(&c);
 
-    printgrid(g,p.width,p.height,"#",".","_");
+    printgrid(g,p.width,p.height,"S","."," ");
 
   //  nonogram_freegrid(g);
 

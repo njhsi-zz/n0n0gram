@@ -185,8 +185,8 @@ typedef unsigned char nonogram_cell;
   /******* 'fcomp (fast-complete)' line solver *******/
 
   extern const struct nonogram_linesuite nonogram_fcompsuite;
-  typedef struct nonogram_fastwork nonogram_fcompwork;
-  typedef struct nonogram_fastconf nonogram_fcompconf;
+//  typedef struct nonogram_fastwork nonogram_fcompwork;
+//  typedef struct nonogram_fastconf nonogram_fcompconf;
 
 
   /******* Miscellaneous *******/
@@ -277,18 +277,11 @@ typedef unsigned char nonogram_cell;
     nonogram_sizetype *val;
   };
 
-  struct nonogram_tn {
-    struct nonogram_tn *c[2];
-    char *n, *v;
-  };
 
   struct nonogram_puzzle {
     struct nonogram_rule *row, *col;
     size_t width, height;
-#if false
-    char *title;
-#endif
-    struct nonogram_tn *notes;
+
   };
 
 #define nonogram_NULLPUZZLE { 0, 0, 0, 0, 0 }

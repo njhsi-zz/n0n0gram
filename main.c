@@ -4,6 +4,27 @@
 static int make_puzzle(nonogram_puzzle *p)
 {
 
+  p->width = 5;
+  p->height = 5;
+
+  p->row = (struct nonogram_rule*) malloc(p->height * sizeof(struct nonogram_rule));
+  p->col = (struct nonogram_rule*) malloc(p->width * sizeof(struct nonogram_rule));
+
+  for (int i=0; i<p->width; i++){
+    p->row[i].len = 1;
+    p->row[i].val = (nonogram_sizetype*)malloc( p->row[i].len * sizeof(nonogram_sizetype) );
+    
+    p->row[i].val[0] = p->width;
+  }
+
+  for (int i=0; i<p->height; i++){
+    p->col[i].len = 1;
+    p->col[i].val = (nonogram_sizetype*)malloc( p->col[i].len * sizeof(nonogram_sizetype) );
+    
+    p->col[i].val[0] = p->height;
+  }
+
+
   return 0;
 }
 
@@ -30,12 +51,17 @@ int main()
   // set the puzzle
   nonogram_puzzle p;
 
+
+  make_puzzle(&p);
+
   // set the result grid
-  nonogram_cell* g;
+  nonogram_cell* g = (nonogram_cell*)malloc(p.width*p.height*sizeof(nonogram_cell)) ;
 
   nonogram_solver c;
 
   //1. verify the puzzle 
+  int i = verify_puzzle(&p);
+  printf("verify:%d\n",i);
 
   // 2. 
   nonogram_initsolver(&c);

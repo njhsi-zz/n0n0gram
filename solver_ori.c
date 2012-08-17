@@ -430,6 +430,7 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     /* no remaining lines or cells; no error - must be solution */
 
     /// if (c->client && c->client->present) (*c->client->present)(c->client_data);
+    printf("client printit\n");
 
     c->remcells = -1;
     return c->stack ? nonogram_FOUND : nonogram_FINISHED;

@@ -45,6 +45,25 @@ int verify_puzzle(const nonogram_puzzle *p)
   return sum;
 }
 
+int printgrid(const nonogram_cell *grid, size_t width, size_t height,
+               const char *solid, const char *dot,
+              const char *blank)
+{
+  size_t row, col, count = 0;
+
+  for (row = 0; row < height; row++) {
+    for (col = 0; col < width; col++) {
+      int c = grid[col + row * width];
+
+      count += printf( "%s", c == nonogram_SOLID ? solid :
+                       c == nonogram_DOT ? dot : blank);
+    }
+    printf("\n");
+    count++;
+  }
+  return count;
+}
+
 
 int main()
 {
@@ -82,6 +101,9 @@ int main()
     ;
 
     nonogram_termsolver(&c);
+
+    printgrid(g,p.width,p.height,"#",".","_");
+
   //  nonogram_freegrid(g);
 
 

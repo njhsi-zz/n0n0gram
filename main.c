@@ -20,34 +20,6 @@ static int make_puzzle_by_p(const char* inf, nonogram_puzzle *p)
 
 }
 
-/* make puzzle */
-static int make_puzzle(nonogram_puzzle *p)
-{
-
-  p->width = 5;
-  p->height = 5;
-
-  p->row = (struct nonogram_rule*) malloc(p->height * sizeof(struct nonogram_rule));
-  p->col = (struct nonogram_rule*) malloc(p->width * sizeof(struct nonogram_rule));
-
-  for (int i=0; i<p->width; i++){
-    p->row[i].len = 1;
-    p->row[i].val = (nonogram_sizetype*)malloc( p->row[i].len * sizeof(nonogram_sizetype) );
-    
-    p->row[i].val[0] = p->width;
-  }
-
-  for (int i=0; i<p->height; i++){
-    p->col[i].len = 1;
-    p->col[i].val = (nonogram_sizetype*)malloc( p->col[i].len * sizeof(nonogram_sizetype) );
-    
-    p->col[i].val[0] = p->height;
-  }
-
-
-  return 0;
-}
-
 /*verify puzzle*/
 int verify_puzzle(const nonogram_puzzle *p)
 {

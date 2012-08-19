@@ -2,11 +2,11 @@
 
 #import <Foundation/Foundation.h>
 
-typedef unsigned char nonogram_cell;
-#define nonogram_BLANK  '\00'
-#define nonogram_DOT    '\01'
-#define nonogram_SOLID  '\02'
-#define nonogram_BOTH   '\03'
+typedef unsigned char nng_cell;
+#define nng_BLANK  '\00'
+#define nng_DOT    '\01'
+#define nng_SOLID  '\02'
+#define nng_BOTH   '\03'
 
 @interface RWNngSolver : NSObject {
     

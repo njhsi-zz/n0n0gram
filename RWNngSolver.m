@@ -1,10 +1,6 @@
-
-
 #import "RWNngSolver.h"
 
 /// internal
-
-
 
 typedef unsigned long nng_sizetype;
 #define nng_PRIuSIZE "lu"
@@ -272,13 +268,13 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
 -(void)gatherSolvers;
 
 -(BOOL)loadPuzzle:(nng_puzzle*)p Grid:(nng_cell *)g Remcells:(int)rc;
+-(void)unload;
 
 //-(BOOL)setLineSolver:(const struct nng_linesuite *)s conf:(void*)conf level:(nng_level) lvl;
 
 -(int)runSolverN:(int*) tries;
 
 -(int)runLines:(int*)lines Test:(int (*)(void*)) test Data:(void*)data;
-
 
 -(int)runCycles:(void*)data Test:(int (*)(void*)) test ;
 
@@ -316,7 +312,7 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     if (!(self=[self init ])) return self;
    
     nng_puzzle* p = malloc(sizeof(nng_puzzle));
-    if (!nng_makepuzzle(p, [grid UTF8String], w, h) ) {
+    if (p && !nng_makepuzzle(p, [grid UTF8String], w, h) ) {
         [self loadPuzzle:p Grid:0 Remcells:w*h];
     }
    
@@ -333,21 +329,16 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
         
         /* no puzzle loaded */
         _puzzle = NULL;
+        _solutions_sum = 0;
         
-        /* no display */
-        ///  _display = NULL;                                                                                                                                 
-        
-        /* no place to send solutions */
-        ///  _client = NULL;                                                                                                                                  
-
-        /* no internal workspace */
+         /* no internal workspace */
         _work = NULL;
         _rowattr = _colattr = NULL;
         _rowflag = _colflag = NULL;
         _stack = NULL;
         
         /* start with no linesolvers */
-        //levels = 0;
+        _levels = 0;
         //linesolver = NULL;
         _workspace.byte = NULL;
         _workspace.ptrdiff = NULL;
@@ -356,14 +347,11 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
         _workspace.cell = NULL;
         
         /* then add the default */
-        //nng_setlinesolvers(c, 1);
-        //nng_setlinesolver(c, 1, "fcomp", &nng_fcompsuite, 0);
         _linesolver[0].name="fcomp";
         _linesolver[0].suite = &nng_fcompsuite;
         _linesolver[0].context = NULL;
         _levels = 1;
-        
-        
+
         _focus = false;
 
     }
@@ -371,18 +359,98 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     return self;
 }
 
+-(void)unload {
+    nng_stack *st = _stack;
+    
+    /* cancel current linesolver */
+    if (_puzzle)
+        switch (_status) {
+            case nng_DONE:
+            case nng_WORKING:
+                if (_linesolver[_level].suite->term)
+                    (*_linesolver[_level].suite->term)
+                    (_linesolver[_level].context);
+                break;
+        }
+    
+    /* free stack */
+    while (st) {
+        _stack = st->next;
+        free(st->grid);
+        free(st->rowattr);
+        free(st->colattr);
+        free(st);
+        st = _stack;
+    }
+    _focus = false;
+    _puzzle = NULL; //`` to free
+    _solutions_sum = 0;
+}
+
 -(void)dealloc {
+    [self unload];
     
+    /* release all workspace */
+    /* free(NULL) should be safe */
+    free(_workspace.byte);
+    free(_workspace.ptrdiff);
+    free(_workspace.size);
+    free(_workspace.nng_size);
+    free(_workspace.cell);
+    free(_rowflag);
+    free(_colflag);
+    free(_rowattr);
+    free(_colattr);
+    free(_work);
     
+    [super dealloc];
 }
 
 -(BOOL)solveOutGrid:(char *)g {
-    
     _grid = g;
-    
+
     int tries = 0;
-    while ([self runSolverN:(tries=1,&tries)] != nng_FINISHED) ;
+    const int sol_limit = 2;
+    while (_solutions_sum<sol_limit && [self runSolverN:(tries=1,&tries)] != nng_FINISHED);
+    
+    return (_solutions_sum>0);
 }
+
+#if CUSTOM_FLAG
+
+
+-(BOOL)puzzleIsLogicallySolvable:(NSString*)puzzle {
+    
+    NSMutableString* s = [[NSMutableString alloc] initWithString:puzzle];
+    int slen = [s length];
+    int u = sqrt(slen);
+    
+    if (!u || (u*u!=slen)) return FALSE;
+    
+    char *ps = [puzzle UTF8String];
+    
+    char *gs = malloc(slen*sizeof(char));
+    
+    int i;
+    for (i=0;i<slen;i++) {
+        if (ps[i]=='0') gs[i]=nng_DOT;
+        else gs[i]=nng_SOLID;
+    }
+    
+    NSString *grid = [[NSString alloc] initWithUTF8String:gs];
+    
+    [self initWithGrid:grid Width:u Height:u];
+    
+    
+    BOOL bsolvable = [self solveOutGrid:gs];
+    
+    
+    free(gs);
+    
+    return bsolvable;
+
+}
+#endif
 
 -(void) gatherSolvers {
     static struct nng_req zero;
@@ -527,14 +595,12 @@ static int nng_testtries(void *vt)
         else
             [self focusColLine:_lineno Value:0], linelen = _puzzle->height;
         
-        
         /* test for consistency */
         if (_fits == 0) {
             /* nothing fitted; must be an error */
             _remcells = -1;
         } else {
             int changed;
-            
             
             /* update display and count number of changed cells and flags */
             changed = [self redeemStep];
@@ -563,7 +629,6 @@ static int nng_testtries(void *vt)
             }
         }
         
-        
         /* set state to indicate no line currently chosen */
         _status = nng_EMPTY;
         return nng_LINE;
@@ -577,9 +642,7 @@ static int nng_testtries(void *vt)
             /* copy from stack */
             _remcells = st->remcells;
             _reminfo = 0;
-            
-            
-            
+
             w = st->editarea.max.x - st->editarea.min.x;
             for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
                 memcpy(_grid + st->editarea.min.x + y * _puzzle->width,
@@ -630,14 +693,11 @@ static int nng_testtries(void *vt)
         
         /* set up context for solving a row or column */
         if (_on_row) {
-            
             _editarea.max.y = (_editarea.min.y = _lineno) + 1;
             [self focusRowLine:_lineno Value:1];
         } else {
-            
             _editarea.max.x = (_editarea.min.x = _lineno) + 1;
             [self focusColLine:_lineno Value:1]; 
-
         }
         [self setupStep];
         /* a line still to be tested has now been set up for solution */
@@ -646,8 +706,7 @@ static int nng_testtries(void *vt)
         /* no remaining lines or cells; no error - must be solution */
         
         /// if (_client && _client->present) (*_client->present)(_client_data);
-        printf("client printit\n");
-        
+        _solutions_sum++;        
         _remcells = -1;
         return _stack ? nng_FOUND : nng_FINISHED;
     } else {

@@ -3,10 +3,6 @@
 /// internal
 
 typedef unsigned long nng_sizetype;
-#define nng_PRIuSIZE "lu"
-#define nng_PRIoSIZE "lo"
-#define nng_PRIxSIZE "lx"
-#define nng_PRIXSIZE "lX"
 
 typedef struct nng_puzzle nng_puzzle;
 
@@ -109,7 +105,6 @@ size_t width, height;
 
 };
 
-typedef unsigned char nng_bool;
 
 static void makescore(nng_lineattr *attr,
                       const struct nng_rule *rule, int len){
@@ -244,8 +239,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     nng_cell *_work;
     nng_lineattr *_rowattr, *_colattr;
     nng_level *_rowflag, *_colflag;
-    
-    nng_bool *_rowdir, *_coldir; /* to be removed */
     
     nng_stack *_stack; /* pushed guesses */
     nng_cell *_grid;
@@ -1135,10 +1128,7 @@ static int nng_testtries(void *vt)
 @end // impl
 
 /// fcomp
-#if 1
-#define printf(...) ((void) 0)
-#define putchar(X) ((void) 0)
-#endif
+
 
 typedef enum {
     INVALID,
@@ -1194,32 +1184,7 @@ static int record_section(const struct nng_initargs *a,
                 return true;
     }
     
-    printf("Accumulate>");
-    for (nng_sizetype i = 0; i < LEN; i++) {
-        assert(i < LEN);
-        if (i < from || i >= to) {
-            putchar('.');
-            continue;
-        }
-        switch (RESULT(i)) {
-            case nng_BLANK:
-                putchar(' ');
-                break;
-            case nng_DOT:
-                putchar('-');
-                break;
-            case nng_SOLID:
-                putchar('#');
-                break;
-            case nng_BOTH:
-                putchar('+');
-                break;
-            default:
-                putchar('?');
-                break;
-        }
-    }
-    printf("<\n");
+
     return false;
 }
 
@@ -1282,7 +1247,6 @@ void fcomp_prep(void *vp, const struct nng_lim *lim, struct nng_req *req)
 
 int fcomp_init(void *vp, struct nng_ws *ws, const struct nng_initargs *a)
 {
-    printf("\n\n\nNEW PUZZLE!\n");
     
     *a->fits = 0;
     
@@ -1313,7 +1277,6 @@ int fcomp_init(void *vp, struct nng_ws *ws, const struct nng_initargs *a)
     // Record how many cells are left that have not yet been determined
     // to be 'BOTH'.
     ctxt->remunk = 0;
-    printf("X:%8zu>", LEN);
     for (nng_sizetype i = 0; i < LEN; i++) {
         if (CELL(i) == nng_BLANK) {
             ctxt->remunk++;
@@ -1321,39 +1284,18 @@ int fcomp_init(void *vp, struct nng_ws *ws, const struct nng_initargs *a)
         } else
             RESULT(i) = CELL(i);
         
-        switch (CELL(i)) {
-            case nng_BLANK:
-                putchar(' ');
-                break;
-            case nng_DOT:
-                putchar('-');
-                break;
-            case nng_SOLID:
-                putchar('#');
-                break;
-            default:
-                putchar('?');
-                break;
-        }
+
     }
-    printf("<\n");
-    printf("          >");
-    for (nng_sizetype i = 0; i < LEN; i++)
-        putchar('0' + i % 10);
-    printf("<\n");
-    
+
     // No blocks are valid to start with, and their minimum positions
     // are all zero.
     ctxt->mode = INVALID;
     B = 0;
     MININV = 0;
-    printf("rule: ");
     for (size_t b = 0; b < RULES; b++) {
-        printf("%s%" nng_PRIuSIZE, b ? "," : "", RULE(b));
         POS(b) = OLDPOS(b) = 0;
         SOLID(b) = OLDSOLID(b) = LEN + 1;
     }
-    printf("\n");
     
     // We assume that there is more work to do.
     return true;
@@ -1392,71 +1334,6 @@ static int fcomp_step(void *vp, void *ws)
     const struct nng_initargs *a = ws;
     CONTEXT(RULES) *ctxt = ws;
     
-    putchar('\n');
-    
-    switch (ctxt->mode) {
-        case RESTORING:
-            printf("RESTORING\n");
-            break;
-        case SLIDING:
-            printf("SLIDING\n");
-            break;
-        case INVALID:
-            printf("INVALID\n");
-            break;
-        case DRAWING:
-            printf("DRAWING\n");
-            break;
-        default:
-            printf("unknown mode!!! %u", (unsigned) ctxt->mode);
-            break;
-    }
-    
-    if (B < RULES)
-        printf("Block %zu of %" nng_PRIuSIZE " at %" nng_PRIuSIZE "\n",
-               B, RULE(B), POS(B));
-    
-    printf("X:%8zu>", LEN);
-    for (nng_sizetype i = 0; i < LEN; i++) {
-        switch (CELL(i)) {
-            case nng_BLANK:
-                putchar(' ');
-                break;
-            case nng_DOT:
-                putchar('-');
-                break;
-            case nng_SOLID:
-                putchar('#');
-                break;
-            default:
-                putchar('?');
-                break;
-        }
-    }
-    printf("<\n");
-    printf("          >");
-    for (nng_sizetype i = 0; i < LEN; i++)
-        putchar('0' + i % 10);
-    printf("<\n");
-    
-    printf("B%-9zu>", B);
-    {
-        nng_sizetype i = 0;
-        for (size_t b = 0; b < RULES; b++) {
-            if (b == 0 || POS(b) > POS(b - 1) + RULE(b - 1))
-                printf("%*s", (int) (POS(b) - i), "");
-            else
-                printf("\n%*s", (int) (POS(b) + 11), "");
-            for (i = POS(b); i < POS(b) + RULE(b); i++)
-                putchar(((ctxt->mode == SLIDING || b < B) && POS(b) + SOLID(b) == i) ?
-                        (b == B ? '!' : 'X') :
-                        (b == B ? '#' : '+'));
-        }
-        printf("%*s", (int) (LEN - i), "");
-        printf("< [%zu-%zu) m%zu\n",
-               BASE, MAX, MININV);
-    }
-    
     switch (ctxt->mode) {
         case DRAWING:
             return step_drawing(vp, ws);
@@ -1483,7 +1360,6 @@ static int step_invalid(void *vp, void *ws)
         
         if (B <= BASE) {
             // That must be the lot.
-            printf("All blocks fixed\n");
             return false;
         }
         
@@ -1495,7 +1371,6 @@ static int step_invalid(void *vp, void *ws)
         for (nng_sizetype i = POS(B) + RULE(B); i < ctxt->maxpos; i++)
             if (CELL(i) == nng_SOLID) {
                 // A trailing solid has been found.
-                printf("Trailing solid at %" nng_PRIuSIZE "\n", i);
                 
                 // Can we jump to it without uncovering a solid?
                 if (POS(B) + SOLID(B) + RULE(B) > i) {
@@ -1513,7 +1388,6 @@ static int step_invalid(void *vp, void *ws)
                 return true;
             }
         // All blocks in position, and no trailing solids found - all valid.
-        printf("New valid state found\n");
         
         // Record the current state in the results.
         if (record_sections(a, MININV, MAX,
@@ -1531,7 +1405,6 @@ static int step_invalid(void *vp, void *ws)
     if (POS(B) + RULE(B) > ctxt->maxpos) {
         // This block has spilled over the end of the line or onto a
         // right-most fixed block.
-        printf("Spilled over\n");
         
         // Restore everything back to where we diverged from a valid
         // state.
@@ -1550,11 +1423,9 @@ static int step_invalid(void *vp, void *ws)
     
     if (i < end) {
         // There is a dot under this block.
-        printf("Dot at offset %" nng_PRIuSIZE "\n", i - POS(B));
         
         if (SOLID(B) < RULE(B)) {
             // But there's a solid before it, so we can't jump.
-            printf("Earlier solid at offset %" nng_PRIuSIZE "\n", SOLID(B));
             
             // Bring up another block.
             ctxt->target = B;
@@ -1564,7 +1435,6 @@ static int step_invalid(void *vp, void *ws)
         
         // Otherwise, skip the dot, and recompute the solid offset.
         POS(B) = i + 1;
-        printf("Skipped to %" nng_PRIuSIZE "\n", POS(B));
         ctxt->mode = INVALID;
         return true;
     }
@@ -1581,8 +1451,6 @@ static int step_invalid(void *vp, void *ws)
         if (SOLID(B) == 0) {
             // We can't span both the solid we cover and the adjacent solid
             // at the end.
-            printf("Can't overlap solids at %" nng_PRIuSIZE
-                   " and %" nng_PRIuSIZE "\n", POS(B), POS(B) + RULE(B));
             
             // Bring up another block.
             ctxt->target = B;
@@ -1593,10 +1461,8 @@ static int step_invalid(void *vp, void *ws)
         SOLID(B)--;
     }
     // This block is in a valid position.
-    printf("Valid at %" nng_PRIuSIZE "\n", POS(B));
+
     if (SOLID(B) < RULE(B))
-        printf("  Solid at offset %" nng_PRIuSIZE "\n", SOLID(B));
-    
     // Position the next block and try to validate it.
     if (B + 1 < MAX && POS(B + 1) < POS(B) + RULE(B) + 1)
         POS(B + 1) = POS(B) + RULE(B) + 1;
@@ -1612,7 +1478,6 @@ static int step_drawing(void *vp, void *ws)
     
     assert(SOLID(ctxt->target) < RULE(ctxt->target));
     
-    printf("Target is %zu\n", ctxt->target);
     do {
         if (B <= BASE)
             // There are no more solids.  We must have exhausted all
@@ -1624,7 +1489,6 @@ static int step_drawing(void *vp, void *ws)
             
             assert(B >= MININV);
             if (B == MININV) {
-                printf("Can't draw any more without restoring\n");
                 assert(MAX > 0);
                 B = MAX - 1;
                 ctxt->mode = RESTORING;
@@ -1638,7 +1502,6 @@ static int step_drawing(void *vp, void *ws)
     } while (SOLID(B) < RULE(B) &&
              POS(ctxt->target) + SOLID(ctxt->target) - RULE(B) + 1 >
              POS(B) + SOLID(B));
-    printf("New target is %zu\n", ctxt->target);
     
     // We must record which left-most block we are about to disturb from
     // its last valid position.
@@ -1648,7 +1511,6 @@ static int step_drawing(void *vp, void *ws)
     // Set the block near to the position of the next block, so that
     // it just overlaps the solid, and try again.
     POS(B) = POS(ctxt->target) + SOLID(ctxt->target) - RULE(B) + 1;
-    printf("Block %zu brought to %" nng_PRIuSIZE "\n", B, POS(B));
     
     // This block should still have a position completely on the line,
     // since the solid we aimed to cover must be on the line.
@@ -1671,7 +1533,6 @@ static int step_sliding(void *vp, void *ws)
     // How far to the right can we shift it before it hits the next
     // block or the end of the line?
     nng_sizetype lim = B + 1 < RULES ? POS(B + 1) - 1 : LEN;
-    printf("Limit is %" nng_PRIuSIZE "\n", lim);
     
     assert(POS(B) == OLDPOS(B));
     assert(SOLID(B) == OLDSOLID(B));
@@ -1700,8 +1561,7 @@ static int step_sliding(void *vp, void *ws)
         // We have managed to slide this block some distance, so record
         // all those possibilities, and try later.  However, if this rules
         // out further information from this line, stop.
-        printf("Merging block %zu from %" nng_PRIuSIZE
-               " to %" nng_PRIuSIZE "\n", B, OLDPOS(B), POS(B));
+
         if (merge1(a, ctxt->pos, ctxt->oldpos,
                    ctxt->solid, ctxt->oldsolid, &ctxt->remunk, B))
             return false;
@@ -1711,9 +1571,7 @@ static int step_sliding(void *vp, void *ws)
     
     if (POS(B) + RULE(B) == lim && B + 1 == MAX) {
         // This block is at its right-most position.
-        printf("Right block is right-most\n");
         if (MAX == BASE) {
-            printf("Fixing final block\n");
             return false;
         }
         MAX--;
@@ -1721,7 +1579,6 @@ static int step_sliding(void *vp, void *ws)
     } else if (POS(B) + RULE(B) < lim &&
                CELL(POS(B) + RULE(B)) == nng_DOT) {
         // There's a dot in the way.
-        printf("Dot obstructs at %" nng_PRIuSIZE "\n", POS(B) + RULE(B));
         
         // Can we jump it?
         nng_sizetype at = POS(B) + RULE(B) + 1;
@@ -1729,7 +1586,6 @@ static int step_sliding(void *vp, void *ws)
             // There is space to jump over the dot.
             
             assert(OLDPOS(B) == POS(B));
-            printf("Jumpable\n");
             
             if (SOLID(B) >= RULE(B)) {
                 // And we're not covering a solid, so we can do it now, and
@@ -1758,16 +1614,12 @@ static int step_sliding(void *vp, void *ws)
             }
             // There's space to jump the dot, but we'd uncover a solid if we
             // did that.
-            printf("But covering solid\n");
         } else {
             // There's no space to jump over the dot.
-            printf("No space past dot\n");
             
             if (B + 1 == MAX) {
                 // This block is at its right-most position.
-                printf("Right block is right-most for dot\n");
                 if (MAX == BASE) {
-                    printf("Fixing final block\n");
                     return false;
                 }
                 MAX--;
@@ -1777,8 +1629,6 @@ static int step_sliding(void *vp, void *ws)
         // Finished handling an obstructive dot.
     }
     // Either there was no dot, or we failed to jump over it.
-    
-    printf("Limit reached; %zu blocks left\n", B - BASE);
     
     // We can't go any further for the moment.  Try sliding a previous
     // block.
@@ -1792,7 +1642,6 @@ static int step_sliding(void *vp, void *ws)
     // get an earlier block to cover it.
     if (MAX <= BASE) {
         // All blocks have been fixed from the right.  Stop here.
-        printf("All blocks fixed\n");
         return false;
     }
     
@@ -1828,28 +1677,18 @@ static int step_restoring(void *vp, void *ws)
     ctxt->target = RULES;
     for (size_t j = MININV; j <= B; j++) {
         size_t i = B + MININV - j;
-        printf("Restoring %zu from %" nng_PRIuSIZE
-               " to %" nng_PRIuSIZE "\n", i,
-               POS(i), OLDPOS(i));
+
         POS(i) = OLDPOS(i);
         SOLID(i) = OLDSOLID(i);
         if (SOLID(i) < RULE(i))
             ctxt->target = i;
     }
     
-#if 0
-    if (B + 1 == MAX) {
-        printf("Blocks %zu to %zu fixed\n", MININV, B);
-        MAX = MININV;
-        ctxt->maxpos = POS(MAX) - 1;
-    }
-#endif
     
     B = MININV;
     MININV = RULES;
     if (B > MAX)
         B = MAX;
-    printf("Returned to block %zu\n", B);
     
     if (ctxt->target >= RULES) {
         // Find a block from this position that covers a solid.
@@ -1858,7 +1697,6 @@ static int step_restoring(void *vp, void *ws)
         
         if (SOLID(B) >= RULE(B)) {
             // There's no such block.
-            printf("No block on left covers solid\n");
             return false;
         }
         ctxt->target = B;

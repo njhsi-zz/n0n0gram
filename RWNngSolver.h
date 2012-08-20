@@ -2,6 +2,8 @@
 
 #import <Foundation/Foundation.h>
 
+enum {NNG_L=51};
+
 typedef unsigned char nng_cell;
 #define nng_BLANK  '\00'
 #define nng_DOT    '\01'

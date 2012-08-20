@@ -228,9 +228,9 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     
     const nng_puzzle *_puzzle;
     struct nng_lim _lim;
-    nng_cell *_work;
-    nng_lineattr *_rowattr, *_colattr;
-    nng_level *_rowflag, *_colflag;
+    nng_cell _work[NNG_L];
+    nng_lineattr _rowattr[NNG_L], _colattr[NNG_L];
+    nng_level _rowflag[NNG_L], _colflag[NNG_L];
     
     nng_cell *_grid;
     int _remcells, _reminfo;
@@ -315,11 +315,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
         _puzzle = NULL;
         _solutions_sum = 0;
         
-         /* no internal workspace */
-        _work = NULL;
-        _rowattr = _colattr = NULL;
-        _rowflag = _colflag = NULL;
-        
         /* start with no linesolvers */
         _levels = 0;
         //linesolver = NULL;
@@ -369,11 +364,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     free(_workspace.size);
     free(_workspace.nng_size);
     free(_workspace.cell);
-    free(_rowflag);
-    free(_colflag);
-    free(_rowattr);
-    free(_colattr);
-    free(_work);
     
     [super dealloc];
 }
@@ -473,16 +463,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     _remcells = rc;
     
     /* working data */
-    free(_work);
-    free(_rowflag);
-    free(_colflag);
-    free(_rowattr);
-    free(_colattr);
-    _work = malloc(sizeof(nng_cell) * _lim.maxline);
-    _rowflag = malloc(sizeof(nng_level) * _puzzle->height);
-    _colflag = malloc(sizeof(nng_level) * _puzzle->width);
-    _rowattr = malloc(sizeof(nng_lineattr) * _puzzle->height);
-    _colattr = malloc(sizeof(nng_lineattr) * _puzzle->width);
     _reminfo = 0;
 
     

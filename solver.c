@@ -70,6 +70,7 @@ static int nonogram_setlinesolvers(nonogram_solver *c, nonogram_level levels)
 
 int nonogram_initsolver(nonogram_solver *c)
 {
+  memset(c,0,sizeof(nonogram_solver));
   /* these can get stuffed; nah, maybe not */
   c->reversed = false;
   c->first = nonogram_SOLID;
@@ -87,19 +88,10 @@ int nonogram_initsolver(nonogram_solver *c)
 
 
   /* no internal workspace */
-  c->work = NULL;
-  c->rowattr = c->colattr = NULL;
-  c->rowflag = c->colflag = NULL;
-  c->stack = NULL;
 
   /* start with no linesolvers */
   c->levels = 0;
   c->linesolver = NULL;
-  c->workspace.byte = NULL;
-  c->workspace.ptrdiff = NULL;
-  c->workspace.size = NULL;
-  c->workspace.nonogram_size = NULL;
-  c->workspace.cell = NULL;
 
   /* then add the default */
   nonogram_setlinesolvers(c, 1);
@@ -117,22 +109,11 @@ int nonogram_termsolver(nonogram_solver *c)
 
   /* release all workspace */
   /* free(NULL) should be safe */
-  free(c->workspace.byte);
-  free(c->workspace.ptrdiff);
-  free(c->workspace.size);
-  free(c->workspace.nonogram_size);
-  free(c->workspace.cell);
-  free(c->rowflag);
-  free(c->colflag);
-  free(c->rowattr);
-  free(c->colattr);
-  free(c->work);
   return 0;
 }
 
 int nonogram_unload(nonogram_solver *c)
 {
-  nonogram_stack *st = c->stack;
 
   /* cancel current linesolver */
   if (c->puzzle)
@@ -146,14 +127,7 @@ int nonogram_unload(nonogram_solver *c)
     }
 
   /* free stack */
-  while (st) {
-    c->stack = st->next;
-    free(st->grid);
-    free(st->rowattr);
-    free(st->colattr);
-    free(st);
-    st = c->stack;
-  }
+
   c->focus = false;
   c->puzzle = NULL;
   return 0;
@@ -178,22 +152,12 @@ int nonogram_load(nonogram_solver *c, const nonogram_puzzle *puzzle,
   c->lim.maxrule = 0;
 
   /* initialise the grid */
-  c->grid = grid;
+  // c->grid = grid;
   c->remcells = remcells;
 
   /* working data */
-  free(c->work);
-  free(c->rowflag);
-  free(c->colflag);
-  free(c->rowattr);
-  free(c->colattr);
-  c->work = malloc(sizeof(nonogram_cell) * c->lim.maxline);
-  c->rowflag = malloc(sizeof(nonogram_level) * puzzle->height);
-  c->colflag = malloc(sizeof(nonogram_level) * puzzle->width);
-  c->rowattr = malloc(sizeof(nonogram_lineattr) * puzzle->height);
-  c->colattr = malloc(sizeof(nonogram_lineattr) * puzzle->width);
   c->reminfo = 0;
-  c->stack = NULL;
+
 
   /* determine heuristic scores for each column */
   for (lineno = 0; lineno < puzzle->width; lineno++) {
@@ -353,61 +317,15 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     c->status = nonogram_EMPTY;
     return nonogram_LINE;
   } else if (c->remcells < 0) {
+
+
+
     /* back-track caused by error or completion of grid */
-    nonogram_stack *st = c->stack;
 
-    if (st) {
-      size_t y, w;
-
-      /* copy from stack */
-      c->remcells = st->remcells;
-      c->reminfo = 0;
-
-
-
-      w = st->editarea.max.x - st->editarea.min.x;
-      for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-        memcpy(c->grid + st->editarea.min.x + y * c->puzzle->width,
-               st->grid + (y - st->editarea.min.y) * w, w);
-
-      /* update screen with restored data */
-      ///if (c->display && c->display->redrawarea)  (*c->display->redrawarea)(c->display_data, &st->editarea);
-      /* mark rows and cols (from st->editarea) as unflagged */
-      c->reversed = false;
-      for (y = st->editarea.min.x; y < st->editarea.max.x; y++) {
-        c->colflag[y] = false;
-
-        /* also restore scores */
-        c->colattr[y] = st->colattr[y - st->editarea.min.x];
-      }
-      ///if (c->display && c->display->colmark)  (*c->display->colmark)(c->display_data, st->editarea.min.x, st->editarea.max.x);
-      for (y = st->editarea.min.y; y < st->editarea.max.y; y++) {
-        c->rowflag[y] = false;
-
-        /* also restore scores */
-        c->rowattr[y] = st->rowattr[y - st->editarea.min.y];
-      }
-      /// if (c->display && c->display->rowmark)        (*c->display->rowmark)(c->display_data,st->editarea.min.y, st->editarea.max.y);
-
-      if (~st->level & nonogram_BOTH) {
-        /* make subsequent guess */
-        makeguess(c);
-      } else {
-        /* pull from stack */
-
-        c->stack = st->next;
-        free(st->grid);
-        free(st->rowattr);
-        free(st->colattr);
-        free(st);
-        c->remcells = -1;
-      }
-      return nonogram_LINE;
-      /* finished loading from stack */
-    } else {
+    printf("guess \n");
       /* nothing left on stack - stop */
       return nonogram_FINISHED;
-    }
+
     /* back-tracking dealt with */
   } else if (c->reminfo > 0) {
     /* no errors, but there are still lines to test */
@@ -430,80 +348,19 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
     /* no remaining lines or cells; no error - must be solution */
 
     /// if (c->client && c->client->present) (*c->client->present)(c->client_data);
-    printf("client printit\n");
+    printf("client printit, logic \n");
 
     c->remcells = -1;
-    return c->stack ? nonogram_FOUND : nonogram_FINISHED;
+    return  nonogram_FINISHED;
   } else {
     /* no more info; no errors; some cells left
        - push stack to make a guess */
-    nonogram_stack *st;
-    size_t x, y, w, h;
 
-    /* record the current state */
-    /* create and insert new stack element */
-
-    st = malloc(sizeof(nonogram_stack));
-    st->next = c->stack;
-    c->stack = st;
-    st->remcells = c->remcells;
-    st->level = nonogram_BLANK;
-
-    /* find area to be recorded */
-#if nonogram_PUSHALL
-    /* COP-OUT: just use whole area */
-    st->editarea.min.x = st->editarea.min.y = 0;
-    st->editarea.max.x = c->puzzle->width;
-    st->editarea.max.y = c->puzzle->height;
-#else
-    /* be more selective */
-    findminrect(c, &st->editarea);
-#endif
-    w = st->editarea.max.x - st->editarea.min.x;
-    h = st->editarea.max.y - st->editarea.min.y;
+    printf("else, guess \n");
 
 
-    /* copy specified area */
-    st->grid = malloc(w * h * sizeof(nonogram_cell));
-    for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-      memcpy(st->grid + (y - st->editarea.min.y) * w,
-             c->grid + st->editarea.min.x + y * c->puzzle->width, w);
 
-    /* copy scores */
-    st->rowattr = malloc(h * sizeof(nonogram_lineattr));
-    st->colattr = malloc(w * sizeof(nonogram_lineattr));
-    for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-      st->rowattr[y - st->editarea.min.y] = c->rowattr[y];
-    for (x = st->editarea.min.x; x < st->editarea.max.x; x++)
-      st->colattr[x - st->editarea.min.x] = c->colattr[x];
-
-    /* choose position to make guess */
-#if 0
-    for (x = st->editarea.min.x; x < st->editarea.max.x; x++)
-      for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-	if (c->grid[x + y * c->puzzle->width] == nonogram_BLANK)
-	  goto found;
-  found:
-    st->pos.x = x;
-    st->pos.y = y;
-#else
-    {
-      int bestscore = -1000;
-      for (x = st->editarea.min.x; x < st->editarea.max.x; x++)
-	for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-	  if (c->grid[x + y * c->puzzle->width] == nonogram_BLANK) {
-	    int score = c->rowattr[y].score + c->colattr[x].score;
-	    if (score < bestscore)
-	      continue;
-	    bestscore = score;
-	    st->pos.x = x;
-	    st->pos.y = y;
-	  }
-    }
-#endif
-
-    makeguess(c);
-    return nonogram_LINE;
+    return nonogram_FINISHED;
   }
 
   return nonogram_UNFINISHED;
@@ -511,67 +368,6 @@ int nonogram_runcycles(nonogram_solver *c, int (*test)(void *), void *data)
 
 static void makeguess(nonogram_solver *c)
 {
-  nonogram_stack *st = c->stack;
-  int guess;
-
-  if (!st) return;
-
-#if false
-#if 0
-  /* make guess */
-  guess = st->level ? (nonogram_BOTH ^ st->level): c->first;
-#else
-  /* hard-wired first choice */
-#if 1
-  /* dot first */
-  guess = (st->level & nonogram_DOT) ? nonogram_SOLID : nonogram_DOT;
-#else
-  /* solid first */
-  guess = (st->level & nonogram_SOLID) ? nonogram_DOT : nonogram_SOLID;
-#endif
-#endif
-#else
-  /* guess base on majority of unaccounted cells */
-  guess = st->level ? (nonogram_BOTH ^ st->level) :
-    (c->rowattr[st->pos.y].dot + c->colattr[st->pos.x].dot >
-     c->rowattr[st->pos.y].solid + c->colattr[st->pos.x].solid ?
-     nonogram_DOT : nonogram_SOLID);
-#endif
-
-
-  c->grid[st->pos.x + st->pos.y * c->puzzle->width] = guess;
-
-  /* update score for row */
-  if (!--*(guess == nonogram_DOT ?
-           &c->rowattr[st->pos.y].dot : &c->rowattr[st->pos.y].solid))
-    c->rowattr[st->pos.y].score = c->puzzle->height;
-  else
-    c->rowattr[st->pos.y].score++;
-
-  /* update score for column */
-  if (!--*(guess == nonogram_DOT ?
-           &c->colattr[st->pos.x].dot : &c->colattr[st->pos.x].solid))
-    c->colattr[st->pos.x].score = c->puzzle->width;
-  else
-    c->colattr[st->pos.x].score++;
-
-  st->level |= guess;
-  c->remcells--;
-  c->reminfo = 2;
-
-  c->rowflag[st->pos.y] = c->levels;
-  c->colflag[st->pos.x] = c->levels;
-  mark1row(c, st->pos.y);
-  mark1col(c, st->pos.x);
-#if 0
-  ///
-  if (c->display && c->display->redrawarea) {
-    struct nonogram_rect gp;
-    gp.max.x = (gp.min.x = st->pos.x) + 1;
-    gp.max.y = (gp.min.y = st->pos.y) + 1;
-    (*c->display->redrawarea)(c->display_data, &gp);
-  }
-#endif
 }
 
 /* This sets the rectangle *b to the smallest inclusive rectangle that
@@ -709,17 +505,6 @@ static void gathersolvers(nonogram_solver *c)
 	most.cell = req.cell;
     }
 
-  free(c->workspace.byte);
-  free(c->workspace.ptrdiff);
-  free(c->workspace.size);
-  free(c->workspace.nonogram_size);
-  free(c->workspace.cell);
-  c->workspace.byte = malloc(most.byte);
-  c->workspace.ptrdiff = malloc(most.ptrdiff * sizeof(ptrdiff_t));
-  c->workspace.size = malloc(most.size * sizeof(size_t));
-  c->workspace.nonogram_size =
-    malloc(most.nonogram_size * sizeof(nonogram_sizetype));
-  c->workspace.cell = malloc(most.cell * sizeof(nonogram_cell));
 }
 
 

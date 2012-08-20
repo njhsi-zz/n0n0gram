@@ -120,11 +120,7 @@ typedef unsigned char nonogram_cell;
 
   /* pointers to each block of shared workspace */
   struct nonogram_ws {
-    void *byte;
-    ptrdiff_t *ptrdiff;
-    size_t *size;
-    nonogram_sizetype *nonogram_size;
-    nonogram_cell *cell;
+    char byte[4192];
   };
 
   struct nonogram_initargs {
@@ -216,15 +212,6 @@ typedef unsigned char nonogram_cell;
     int score, dot, solid;
   } nonogram_lineattr;
 
-  typedef struct nonogram_stack {
-    struct nonogram_stack *next;
-    nonogram_cell *grid;
-    struct nonogram_rect editarea;
-    struct nonogram_point pos;
-    nonogram_lineattr *rowattr, *colattr;
-    int remcells, level;
-  } nonogram_stack;
-
   struct nonogram_lsnt {
     void *context;
     const char *name;
@@ -250,14 +237,11 @@ typedef unsigned char nonogram_cell;
 
     const nonogram_puzzle *puzzle;
     struct nonogram_lim lim;
-    nonogram_cell *work;
-    nonogram_lineattr *rowattr, *colattr;
-    nonogram_level *rowflag, *colflag;
+    nonogram_cell work[50];
+    nonogram_lineattr rowattr[50], colattr[50];
+    nonogram_level rowflag[50], colflag[50];
 
-    nonogram_bool *rowdir, *coldir; /* to be removed */
-
-    nonogram_stack *stack; /* pushed guesses */
-    nonogram_cell *grid;
+    nonogram_cell grid[50*50];
     int remcells, reminfo;
 
     /* (on_row,lineno) == line being solved */

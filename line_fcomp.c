@@ -34,7 +34,7 @@ struct { \
   size_t remunk, block, base, max, mininv, target; \
   stepmode mode; \
  \
-  nonogram_sizetype pos[MR], oldpos[MR], solid[MR], oldsolid[MR], maxpos; \
+  nonogram_sizetype pos[128], oldpos[128], solid[128], oldsolid[128], maxpos; \
 }
 
 #define RULE(I) (a->rule[(I) * a->rulestep])

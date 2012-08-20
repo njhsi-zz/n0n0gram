@@ -78,14 +78,6 @@ typedef struct {
 } nng_lineattr;
 
 
-typedef struct nng_stack {
-struct nng_stack *next;
-nng_cell *grid;
-struct nng_rect editarea;
-struct nng_point pos;
-nng_lineattr *rowattr, *colattr;
-int remcells, level;
-} nng_stack;
 
 struct nng_lsnt {
 void *context;
@@ -240,7 +232,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     nng_lineattr *_rowattr, *_colattr;
     nng_level *_rowflag, *_colflag;
     
-    nng_stack *_stack; /* pushed guesses */
     nng_cell *_grid;
     int _remcells, _reminfo;
     /* (on_row,lineno) == line being solved */
@@ -328,7 +319,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
         _work = NULL;
         _rowattr = _colattr = NULL;
         _rowflag = _colflag = NULL;
-        _stack = NULL;
         
         /* start with no linesolvers */
         _levels = 0;
@@ -353,8 +343,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
 }
 
 -(void)unload {
-    nng_stack *st = _stack;
-    
     /* cancel current linesolver */
     if (_puzzle)
         switch (_status) {
@@ -366,15 +354,6 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
                 break;
         }
     
-    /* free stack */
-    while (st) {
-        _stack = st->next;
-        free(st->grid);
-        free(st->rowattr);
-        free(st->colattr);
-        free(st);
-        st = _stack;
-    }
     _focus = false;
     _puzzle = NULL; //`` to free
     _solutions_sum = 0;
@@ -434,9 +413,7 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     
     [self initWithGrid:grid Width:u Height:u];
     
-    
-    BOOL bsolvable = [self solveOutGrid:gs];
-    
+    BOOL bsolvable = [self solveOutGrid:gs];    
     
     free(gs);
     
@@ -507,7 +484,7 @@ static const struct nng_linesuite nng_fcompsuite = {&fcomp_prep, &fcomp_init, &f
     _rowattr = malloc(sizeof(nng_lineattr) * _puzzle->height);
     _colattr = malloc(sizeof(nng_lineattr) * _puzzle->width);
     _reminfo = 0;
-    _stack = NULL;
+
     
     /* determine heuristic scores for each column */
     for (lineno = 0; lineno < _puzzle->width; lineno++) {
@@ -626,60 +603,8 @@ static int nng_testtries(void *vt)
         _status = nng_EMPTY;
         return nng_LINE;
     } else if (_remcells < 0) {
-        /* back-track caused by error or completion of grid */
-        nng_stack *st = _stack;
-        
-        if (st) {
-            size_t y, w;
-            
-            /* copy from stack */
-            _remcells = st->remcells;
-            _reminfo = 0;
-
-            w = st->editarea.max.x - st->editarea.min.x;
-            for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-                memcpy(_grid + st->editarea.min.x + y * _puzzle->width,
-                       st->grid + (y - st->editarea.min.y) * w, w);
-            
-            /* update screen with restored data */
-            ///if (_display && _display->redrawarea)  (*_display->redrawarea)(_display_data, &st->editarea);
-            /* mark rows and cols (from st->editarea) as unflagged */
-            _reversed = false;
-            for (y = st->editarea.min.x; y < st->editarea.max.x; y++) {
-                _colflag[y] = false;
-                
-                /* also restore scores */
-                _colattr[y] = st->colattr[y - st->editarea.min.x];
-            }
-            ///if (_display && _display->colmark)  (*_display->colmark)(_display_data, st->editarea.min.x, st->editarea.max.x);
-            for (y = st->editarea.min.y; y < st->editarea.max.y; y++) {
-                _rowflag[y] = false;
-                
-                /* also restore scores */
-                _rowattr[y] = st->rowattr[y - st->editarea.min.y];
-            }
-            /// if (_display && _display->rowmark)        (*_display->rowmark)(_display_data,st->editarea.min.y, st->editarea.max.y);
-            
-            if (~st->level & nng_BOTH) {
-                /* make subsequent guess */
-                [self guess];  
-            } else {
-                /* pull from stack */
-                
-                _stack = st->next;
-                free(st->grid);
-                free(st->rowattr);
-                free(st->colattr);
-                free(st);
-                _remcells = -1;
-            }
-            return nng_LINE;
-            /* finished loading from stack */
-        } else {
-            /* nothing left on stack - stop */
-            return nng_FINISHED;
-        }
-        /* back-tracking dealt with */
+      _solutions_sum = -1; // guess
+      return nng_FINISHED;
     } else if (_reminfo > 0) {
         /* no errors, but there are still lines to test */
         [self findEasiest];
@@ -701,67 +626,10 @@ static int nng_testtries(void *vt)
         /// if (_client && _client->present) (*_client->present)(_client_data);
         _solutions_sum++;        
         _remcells = -1;
-        return _stack ? nng_FOUND : nng_FINISHED;
+        return  nng_FINISHED;
     } else {
-        /* no more info; no errors; some cells left
-         - push stack to make a guess */
-        nng_stack *st;
-        size_t x, y, w, h;
-        
-        /* record the current state */
-        /* create and insert new stack element */
-        
-        st = malloc(sizeof(nng_stack));
-        st->next = _stack;
-        _stack = st;
-        st->remcells = _remcells;
-        st->level = nng_BLANK;
-        
-        /* find area to be recorded */
-#if nng_PUSHALL
-        /* COP-OUT: just use whole area */
-        st->editarea.min.x = st->editarea.min.y = 0;
-        st->editarea.max.x = _puzzle->width;
-        st->editarea.max.y = _puzzle->height;
-#else
-        /* be more selective */
-        [self findMinRect:&st->editarea];
-#endif
-        w = st->editarea.max.x - st->editarea.min.x;
-        h = st->editarea.max.y - st->editarea.min.y;
-        
-        
-        /* copy specified area */
-        st->grid = malloc(w * h * sizeof(nng_cell));
-        for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-            memcpy(st->grid + (y - st->editarea.min.y) * w,
-                   _grid + st->editarea.min.x + y * _puzzle->width, w);
-        
-        /* copy scores */
-        st->rowattr = malloc(h * sizeof(nng_lineattr));
-        st->colattr = malloc(w * sizeof(nng_lineattr));
-        for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-            st->rowattr[y - st->editarea.min.y] = _rowattr[y];
-        for (x = st->editarea.min.x; x < st->editarea.max.x; x++)
-            st->colattr[x - st->editarea.min.x] = _colattr[x];
-        
-        /* choose position to make guess */
-        {
-            int bestscore = -1000;
-            for (x = st->editarea.min.x; x < st->editarea.max.x; x++)
-                for (y = st->editarea.min.y; y < st->editarea.max.y; y++)
-                    if (_grid[x + y * _puzzle->width] == nng_BLANK) {
-                        int score = _rowattr[y].score + _colattr[x].score;
-                        if (score < bestscore)
-                            continue;
-                        bestscore = score;
-                        st->pos.x = x;
-                        st->pos.y = y;
-                    }
-        }
-        
-        [self guess];
-        return nng_LINE;
+      _solutions_sum = -2; // guess
+      return nng_FINISHED;
     }
     
     return nng_UNFINISHED;
@@ -888,58 +756,6 @@ static int nng_testtries(void *vt)
 }
 
 -(void)guess {
-    nng_stack *st = _stack;
-    int guess;
-    
-    if (!st) return;
-    
-#if false
-#if 0
-    /* make guess */
-    guess = st->level ? (nng_BOTH ^ st->level): _first;
-#else
-    /* hard-wired first choice */
-#if 1
-    /* dot first */
-    guess = (st->level & nng_DOT) ? nng_SOLID : nng_DOT;
-#else
-    /* solid first */
-    guess = (st->level & nng_SOLID) ? nng_DOT : nng_SOLID;
-#endif
-#endif
-#else
-    /* guess base on majority of unaccounted cells */
-    guess = st->level ? (nng_BOTH ^ st->level) :
-    (_rowattr[st->pos.y].dot + _colattr[st->pos.x].dot >
-     _rowattr[st->pos.y].solid + _colattr[st->pos.x].solid ?
-     nng_DOT : nng_SOLID);
-#endif
-    
-    
-    _grid[st->pos.x + st->pos.y * _puzzle->width] = guess;
-    
-    /* update score for row */
-    if (!--*(guess == nng_DOT ?
-             &_rowattr[st->pos.y].dot : &_rowattr[st->pos.y].solid))
-        _rowattr[st->pos.y].score = _puzzle->height;
-    else
-        _rowattr[st->pos.y].score++;
-    
-    /* update score for column */
-    if (!--*(guess == nng_DOT ?
-             &_colattr[st->pos.x].dot : &_colattr[st->pos.x].solid))
-        _colattr[st->pos.x].score = _puzzle->width;
-    else
-        _colattr[st->pos.x].score++;
-    
-    st->level |= guess;
-    _remcells--;
-    _reminfo = 2;
-    
-    _rowflag[st->pos.y] = _levels;
-    _colflag[st->pos.x] = _levels;
-    [self mark1Row:st->pos.y];
-    [self mark1Col:st->pos.x];
 }
 
 -(void)findMinRect:(struct nng_rect *)b {

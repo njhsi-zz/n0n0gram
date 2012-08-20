@@ -33,6 +33,7 @@ int main (int argc, const char * argv[]) {
     BOOL bsolved = [s puzzleIsLogicallySolvable:puzzle];        
 
     if (bsolved) NSLog(@"solvable!");
+    else NSLog(@"unsolvable!");
     
     [pool drain];
     

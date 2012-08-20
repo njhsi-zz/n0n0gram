@@ -24,7 +24,7 @@ typedef unsigned char nng_cell;
 /**
  solve the loaded puzzle to output a char image of nng_SOLD&BLANK...
  */
--(BOOL) solveOutGrid:(char*)g;
+-(NSString*) solveOutGrid;
 
 
 #if CUSTOM_FLAG
@@ -38,7 +38,7 @@ typedef unsigned char nng_cell;
  [s release];
  ... 
  */
-- (BOOL)puzzleIsLogicallySolvable:(NSString *)puzzle;
+- (NSString*)puzzleIsLogicallySolvable:(NSString *)puzzle;
 #endif
 
 @end

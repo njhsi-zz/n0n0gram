@@ -1,750 +1,400 @@
-
-#include <stdbool.h>
-#include <assert.h>
-
-#include "nonogram.h"
-
-
-static void prep(void *, const struct nonogram_lim *, struct nonogram_req *);
-static int init(void *, struct nonogram_ws *ws,
-                const struct nonogram_initargs *a);
-static int step(void *, void *ws);
-
-const struct nonogram_linesuite nonogram_fcompsuite = {
-  &prep, &init, &step, 0
-};
-
-
-#if 1
-#define printf(...) ((void) 0)
-#define putchar(X) ((void) 0)
-#endif
-
-typedef enum {
-  INVALID,
-  SLIDING,
-  DRAWING,
-  RESTORING,
-} stepmode;
-
-#define CONTEXT(MR) \
-struct { \
-  struct nonogram_initargs a; \
- \
-  size_t remunk, block, base, max, mininv, target; \
-  stepmode mode; \
- \
-  nonogram_sizetype pos[128], oldpos[128], solid[128], oldsolid[128], maxpos; \
-}
-
-#define RULE(I) (a->rule[(I) * a->rulestep])
-#define POS(I) (ctxt->pos[I])
-#define OLDPOS(I) (ctxt->oldpos[I])
-#define SOLID(I) (ctxt->solid[I])
-#define OLDSOLID(I) (ctxt->oldsolid[I])
-#define B (ctxt->block)
-#define LEN (a->linelen)
-#define CELL(X) (a->line[(X) * a->linestep])
-#define RESULT(X) (a->result[(X) * a->resultstep])
-#define BASE (ctxt->base)
-#define MAX (ctxt->max)
-#define MININV (ctxt->mininv)
-#define RULES (a->rulelen)
-
-/* Return true if there are no cells remaining from which information
-   could be obtained. */
-static int record_section(const struct nonogram_initargs *a,
-			  nonogram_sizetype from,
-			  nonogram_sizetype to,
-			  nonogram_cell v,
-			  size_t *remunk)
-{
-  ++*a->fits;
-  for (nonogram_sizetype i = from; i < to; i++) {
-    assert(i < LEN);
-    if (CELL(i) != nonogram_BLANK)
-      continue;
-    nonogram_cell *cp = &RESULT(i);
-    if (*cp & v)
-      continue;
-    *cp |= v;
-    assert(*cp < 4);
-    if (*cp == nonogram_BOTH)
-      if (--*remunk == 0)
-	return true;
-  }
-
-  printf("Accumulate>");
-  for (nonogram_sizetype i = 0; i < LEN; i++) {
-    assert(i < LEN);
-    if (i < from || i >= to) {
-      putchar('.');
-      continue;
-    }
-    switch (RESULT(i)) {
-    case nonogram_BLANK:
-      putchar(' ');
-      break;
-    case nonogram_DOT:
-      putchar('-');
-      break;
-    case nonogram_SOLID:
-      putchar('#');
-      break;
-    case nonogram_BOTH:
-      putchar('+');
-      break;
-    default:
-      putchar('?');
-      break;
-    }
-  }
-  printf("<\n");
-  return false;
-}
-
-static int merge1(const struct nonogram_initargs *a,
-		  nonogram_sizetype *pos,
-		  nonogram_sizetype *oldpos,
-		  nonogram_sizetype *solid,
-		  nonogram_sizetype *oldsolid,
-		  size_t *remunk,
-		  size_t b)
-{
-  if (record_section(a, oldpos[b], pos[b], nonogram_DOT, remunk) ||
-      record_section(a, oldpos[b] + RULE(b), pos[b] + RULE(b),
-		     nonogram_SOLID, remunk))
-    return true;
-
-  oldpos[b] = pos[b];
-  oldsolid[b] = solid[b];
-  return false;
-}
-
-static int record_sections(const struct nonogram_initargs *a,
-			   size_t base, size_t max,
-			   nonogram_sizetype *pos,
-			   nonogram_sizetype *oldpos,
-			   nonogram_sizetype *solid,
-			   nonogram_sizetype *oldsolid,
-			   size_t *remunk)
-{
-  // Where does the section of dots before the first block start?
-  nonogram_sizetype left = base > 0 ? pos[base - 1] + RULE(base - 1) : 0;
-
-  for (size_t b = base; b < max; b++) {
-    // Mark the dots leading up to the block.
-    if (record_section(a, left, pos[b], nonogram_DOT, remunk))
-      return true;
-
-    // Where does this block end, and the next set of dots start?
-    left = pos[b] + RULE(b);
-
-    // Mark the solids of this block.
-    if (record_section(a, pos[b], left, nonogram_SOLID, remunk))
-      return true;
-
-    oldpos[b] = pos[b];
-    oldsolid[b] = solid[b];
-  }
-
-  // Mark the trailing dots.
-  return record_section(a, left,
-			max == RULES ? LEN : pos[max],
-			nonogram_DOT, remunk);
-}
-
-void prep(void *vp, const struct nonogram_lim *lim, struct nonogram_req *req)
-{
-  CONTEXT(lim->maxrule) ctxt;
-  req->byte = sizeof ctxt;
-}
-
-int init(void *vp, struct nonogram_ws *ws, const struct nonogram_initargs *a)
-{
-  printf("\n\n\nNEW PUZZLE!\n");
-
-  *a->fits = 0;
-
-  // Handle the special case of an empty rule.
-  if (RULES == 0) {
-    for (nonogram_sizetype i = 0; i < LEN; i++) {
-      if (CELL(i) == nonogram_DOT)
-	continue;
-      if (CELL(i) != nonogram_BLANK)
-	return false;
-      RESULT(i) = nonogram_DOT;
-    }
-    *a->fits = 1;
-    return false;
-  }
-
-  CONTEXT(RULES) *ctxt = ws->byte;
-  ctxt->a = *a;
-
-
-  // The left-most block that hasn't been fixed yet is 0.
-  BASE = 0;
-
-  // No blocks on the right have fixed either.
-  MAX = RULES;
-  ctxt->maxpos = LEN;
-
-  // Record how many cells are left that have not yet been determined
-  // to be 'BOTH'.
-  ctxt->remunk = 0;
-  printf("X:%8zu>", LEN);
-  for (nonogram_sizetype i = 0; i < LEN; i++) {
-    if (CELL(i) == nonogram_BLANK) {
-      ctxt->remunk++;
-      RESULT(i) = nonogram_BLANK;
-    } else
-      RESULT(i) = CELL(i);
-
-    switch (CELL(i)) {
-    case nonogram_BLANK:
-      putchar(' ');
-      break;
-    case nonogram_DOT:
-      putchar('-');
-      break;
-    case nonogram_SOLID:
-      putchar('#');
-      break;
-    default:
-      putchar('?');
-      break;
-    }
-  }
-  printf("<\n");
-  printf("          >");
-  for (nonogram_sizetype i = 0; i < LEN; i++)
-    putchar('0' + i % 10);
-  printf("<\n");
-
-  // No blocks are valid to start with, and their minimum positions
-  // are all zero.
-  ctxt->mode = INVALID;
-  B = 0;
-  MININV = 0;
-  printf("rule: ");
-  for (size_t b = 0; b < RULES; b++) {
-    printf("%s%" nonogram_PRIuSIZE, b ? "," : "", RULE(b));
-    POS(b) = OLDPOS(b) = 0;
-    SOLID(b) = OLDSOLID(b) = LEN + 1;
-  }
-  printf("\n");
-
-  // We assume that there is more work to do.
-  return true;
-}
-
-// Look for a gap of length 'req', starting at '*at', going no further
-// than 'lim'.  Return true, and write the position in '*at'.
-static int can_jump(const struct nonogram_initargs *a,
-		    nonogram_sizetype req,
-		    nonogram_sizetype lim,
-		    nonogram_sizetype *at)
-{
-  nonogram_sizetype got = 0;
-  for (nonogram_sizetype i = *at; i < lim && got < req; i++) {
-    if (CELL(i) == nonogram_DOT) {
-      got = 0;
-      *at = i + 1;
-    } else {
-      // We can be sure that there are no solids between us and the
-      // next block/end of line.
-      assert(CELL(i) == nonogram_BLANK);
-      got++;
-    }
-  }
-
-  return got >= req;
-}
-
-static int step_invalid(void *vp, void *ws);
-static int step_drawing(void *vp, void *ws);
-static int step_sliding(void *vp, void *ws);
-static int step_restoring(void *vp, void *ws);
-
-static int step(void *vp, void *ws)
-{
-  const struct nonogram_initargs *a = ws;
-  CONTEXT(RULES) *ctxt = ws;
-
-  putchar('\n');
-
-  switch (ctxt->mode) {
-  case RESTORING:
-    printf("RESTORING\n");
-    break;
-  case SLIDING:
-    printf("SLIDING\n");
-    break;
-  case INVALID:
-    printf("INVALID\n");
-    break;
-  case DRAWING:
-    printf("DRAWING\n");
-    break;
-  default:
-    printf("unknown mode!!! %u", (unsigned) ctxt->mode);
-    break;
-  }
-
-  if (B < RULES)
-    printf("Block %zu of %" nonogram_PRIuSIZE " at %" nonogram_PRIuSIZE "\n",
-	   B, RULE(B), POS(B));
-
-  printf("X:%8zu>", LEN);
-  for (nonogram_sizetype i = 0; i < LEN; i++) {
-    switch (CELL(i)) {
-    case nonogram_BLANK:
-      putchar(' ');
-      break;
-    case nonogram_DOT:
-      putchar('-');
-      break;
-    case nonogram_SOLID:
-      putchar('#');
-      break;
-    default:
-      putchar('?');
-      break;
-    }
-  }
-  printf("<\n");
-  printf("          >");
-  for (nonogram_sizetype i = 0; i < LEN; i++)
-    putchar('0' + i % 10);
-  printf("<\n");
-
-  printf("B%-9zu>", B);
-  {
-    nonogram_sizetype i = 0;
-    for (size_t b = 0; b < RULES; b++) {
-      if (b == 0 || POS(b) > POS(b - 1) + RULE(b - 1))
-	printf("%*s", (int) (POS(b) - i), "");
-      else
-	printf("\n%*s", (int) (POS(b) + 11), "");
-      for (i = POS(b); i < POS(b) + RULE(b); i++)
-	putchar(((ctxt->mode == SLIDING || b < B) && POS(b) + SOLID(b) == i) ?
-		(b == B ? '!' : 'X') :
-		(b == B ? '#' : '+'));
-    }
-    printf("%*s", (int) (LEN - i), "");
-    printf("< [%zu-%zu) m%zu\n",
-	   BASE, MAX, MININV);
-  }
-
-  switch (ctxt->mode) {
-  case DRAWING:
-    return step_drawing(vp, ws);
-  case SLIDING:
-    return step_sliding(vp, ws);
-  case INVALID:
-    return step_invalid(vp, ws);
-  case RESTORING:
-    return step_restoring(vp, ws);
-  default:
-    assert(!"Invalid state");
-  }
-
-  return false;
-}
-
-static int step_invalid(void *vp, void *ws)
-{
-  const struct nonogram_initargs *a = ws;
-  CONTEXT(RULES) *ctxt = ws;
-
-  if (B >= MAX) {
-    // All blocks are in place.
-
-    if (B <= BASE) {
-      // That must be the lot.
-      printf("All blocks fixed\n");
-      return false;
-    }
-
-    // Go back to the previous block for some checks.
-    B--;
-
-    // Check for trailing solids before the next block or the end of
-    // the line.
-    for (nonogram_sizetype i = POS(B) + RULE(B); i < ctxt->maxpos; i++)
-      if (CELL(i) == nonogram_SOLID) {
-	// A trailing solid has been found.
-	printf("Trailing solid at %" nonogram_PRIuSIZE "\n", i);
-
-	// Can we jump to it without uncovering a solid?
-	if (POS(B) + SOLID(B) + RULE(B) > i) {
-	  // Yes, so do so, and revalidate.
-	  POS(B) = i + 1 - RULE(B);
-	  ctxt->mode = INVALID;
-	  return true;
-	}
-	// No, we'd uncover a solid.
-
-	// Try to bring up an earlier block.
-	assert(SOLID(B) < RULE(B));
-	ctxt->target = B;
-	ctxt->mode = DRAWING;
-	return true;
-      }
-    // All blocks in position, and no trailing solids found - all valid.
-    printf("New valid state found\n");
-
-    // Record the current state in the results.
-    if (record_sections(a, MININV, MAX,
-			ctxt->pos, ctxt->oldpos,
-			ctxt->solid, ctxt->oldsolid,
-			&ctxt->remunk))
-      return false;
-    MININV = MAX;
-
-    // Start sliding the right-most unfixed block right.
-    ctxt->mode = SLIDING;
-    return true;
-  }
-
-  if (POS(B) + RULE(B) > ctxt->maxpos) {
-    // This block has spilled over the end of the line or onto a
-    // right-most fixed block.
-    printf("Spilled over\n");
-
-    // Restore everything back to where we diverged from a valid
-    // state.
-    ctxt->mode = RESTORING;
-    return true;
-  }
-
-  // Determine whether this block covers any solids or dots.
-  nonogram_sizetype i = POS(B), end = i + RULE(B);
-  SOLID(B) = LEN + 1;
-  while (i < end && CELL(i) != nonogram_DOT) {
-    if (SOLID(B) >= RULE(B) && CELL(i) == nonogram_SOLID)
-      SOLID(B) = i - POS(B);
-    i++;
-  }
-
-  if (i < end) {
-    // There is a dot under this block.
-    printf("Dot at offset %" nonogram_PRIuSIZE "\n", i - POS(B));
-
-    if (SOLID(B) < RULE(B)) {
-      // But there's a solid before it, so we can't jump.
-      printf("Earlier solid at offset %" nonogram_PRIuSIZE "\n", SOLID(B));
-
-      // Bring up another block.
-      ctxt->target = B;
-      ctxt->mode = DRAWING;
-      return true;
-    }
-
-    // Otherwise, skip the dot, and recompute the solid offset.
-    POS(B) = i + 1;
-    printf("Skipped to %" nonogram_PRIuSIZE "\n", POS(B));
-    ctxt->mode = INVALID;
-    return true;
-  }
-
-  // If the block is not covering a solid, but just touching one on
-  // its right, pretend that the block overlaps it.
-  if (SOLID(B) >= RULE(B) && end < LEN && CELL(end) == nonogram_SOLID)
-    SOLID(B) = RULE(B);
-
-  // Keep moving the block one cell at a time, in order to cover any
-  // adjacent solid on its right.
-  while (POS(B) + RULE(B) < ctxt->maxpos &&
-	 CELL(POS(B) + RULE(B)) == nonogram_SOLID) {
-    if (SOLID(B) == 0) {
-      // We can't span both the solid we cover and the adjacent solid
-      // at the end.
-      printf("Can't overlap solids at %" nonogram_PRIuSIZE
-	     " and %" nonogram_PRIuSIZE "\n", POS(B), POS(B) + RULE(B));
-
-      // Bring up another block.
-      ctxt->target = B;
-      ctxt->mode = DRAWING;
-      return true;
-    }
-    POS(B)++;
-    SOLID(B)--;
-  }
-  // This block is in a valid position.
-  printf("Valid at %" nonogram_PRIuSIZE "\n", POS(B));
-  if (SOLID(B) < RULE(B))
-    printf("  Solid at offset %" nonogram_PRIuSIZE "\n", SOLID(B));
-
-  // Position the next block and try to validate it.
-  if (B + 1 < MAX && POS(B + 1) < POS(B) + RULE(B) + 1)
-    POS(B + 1) = POS(B) + RULE(B) + 1;
-  B++;
-  ctxt->mode = INVALID;
-  return true;
-}
-
-static int step_drawing(void *vp, void *ws)
-{
-  const struct nonogram_initargs *a = ws;
-  CONTEXT(RULES) *ctxt = ws;
-
-  assert(SOLID(ctxt->target) < RULE(ctxt->target));
-
-  printf("Target is %zu\n", ctxt->target);
-  do {
-    if (B <= BASE)
-      // There are no more solids.  We must have exhausted all
-      // possibilities, so stop here.
-      return false;
-
-    if (MININV < MAX) {
-      // mininv has been set
-
-      assert(B >= MININV);
-      if (B == MININV) {
-	printf("Can't draw any more without restoring\n");
-	assert(MAX > 0);
-	B = MAX - 1;
-	ctxt->mode = RESTORING;
-	return true;
-      }
-    }
-
-    if (SOLID(B) < RULE(B))
-      ctxt->target = B;
-    B--;
-  } while (SOLID(B) < RULE(B) &&
-	   POS(ctxt->target) + SOLID(ctxt->target) - RULE(B) + 1 >
-	   POS(B) + SOLID(B));
-  printf("New target is %zu\n", ctxt->target);
-
-  // We must record which left-most block we are about to disturb from
-  // its last valid position.
-  if (B < MININV)
-    MININV = B;
-
-  // Set the block near to the position of the next block, so that
-  // it just overlaps the solid, and try again.
-  POS(B) = POS(ctxt->target) + SOLID(ctxt->target) - RULE(B) + 1;
-  printf("Block %zu brought to %" nonogram_PRIuSIZE "\n", B, POS(B));
-
-  // This block should still have a position completely on the line,
-  // since the solid we aimed to cover must be on the line.
-  assert(POS(B) + RULE(B) <= LEN);
-
-  // Start checking whether this and later blocks are valid.
-  ctxt->mode = INVALID;
-
-  // Try again.
-  return true;
-}
-
-static int step_sliding(void *vp, void *ws)
-{
-  const struct nonogram_initargs *a = ws;
-  CONTEXT(RULES) *ctxt = ws;
-
-  // Attempt to slide this block to the right.
-
-  // How far to the right can we shift it before it hits the next
-  // block or the end of the line?
-  nonogram_sizetype lim = B + 1 < RULES ? POS(B + 1) - 1 : LEN;
-  printf("Limit is %" nonogram_PRIuSIZE "\n", lim);
-
-  assert(POS(B) == OLDPOS(B));
-  assert(SOLID(B) == OLDSOLID(B));
-
-  // Slide right until we reach the next block, the end of the line,
-  // or a dot.  Also stop if we are about to uncover a solid.
-  while (POS(B) + RULE(B) < lim &&
-	 CELL(POS(B) + RULE(B)) != nonogram_DOT &&
-	 SOLID(B) != 0) {
-    // We shouldn't be about to cover a solid by moving.  Otherwise,
-    // how could we be in a valid state?
-    assert(CELL(POS(B) + RULE(B)) != nonogram_SOLID);
-
-    // Keep track of the left-most solid that we are covering, as we
-    // move right one cell.
-    if (SOLID(B) > 0)
-      SOLID(B)--;
-    else
-      SOLID(B) = LEN + 1;
-    POS(B)++;
-  }
-
-  assert(POS(B) >= OLDPOS(B));
-
-  if (POS(B) != OLDPOS(B)) {
-    // We have managed to slide this block some distance, so record
-    // all those possibilities, and try later.  However, if this rules
-    // out further information from this line, stop.
-    printf("Merging block %zu from %" nonogram_PRIuSIZE
-	   " to %" nonogram_PRIuSIZE "\n", B, OLDPOS(B), POS(B));
-    if (merge1(a, ctxt->pos, ctxt->oldpos,
-	       ctxt->solid, ctxt->oldsolid, &ctxt->remunk, B))
-      return false;
-  }
-
-  // We failed to slide the block beyond this point.  Why?
-
-  if (POS(B) + RULE(B) == lim && B + 1 == MAX) {
-    // This block is at its right-most position.
-    printf("Right block is right-most\n");
-    if (MAX == BASE) {
-      printf("Fixing final block\n");
-      return false;
-    }
-    MAX--;
-    ctxt->maxpos = POS(B) - 1;
-  } else if (POS(B) + RULE(B) < lim &&
-      CELL(POS(B) + RULE(B)) == nonogram_DOT) {
-    // There's a dot in the way.
-    printf("Dot obstructs at %" nonogram_PRIuSIZE "\n", POS(B) + RULE(B));
-
-    // Can we jump it?
-    nonogram_sizetype at = POS(B) + RULE(B) + 1;
-    if (POS(B) + RULE(B) * 2 < lim && can_jump(a, RULE(B), lim, &at)) {
-      // There is space to jump over the dot.
-
-      assert(OLDPOS(B) == POS(B));
-      printf("Jumpable\n");
-
-      if (SOLID(B) >= RULE(B)) {
-	// And we're not covering a solid, so we can do it now, and
-	// keep sliding.
-
-	// Jump to the space.
-	POS(B) = at;
-
-	// Record the previous section as dots.
-	if (record_section(a, OLDPOS(B), OLDPOS(B) + RULE(B),
-			   nonogram_DOT, &ctxt->remunk))
-	  return false;
-
-	// Record the new section as solids.
-	if (record_section(a, POS(B), POS(B) + RULE(B),
-			   nonogram_SOLID, &ctxt->remunk))
-	  return false;
-
-	// Note that this move has been recorded.
-	OLDPOS(B) = POS(B);
-	OLDSOLID(B) = SOLID(B) = LEN + 1;
-
-	// Keep sliding this block.
-	ctxt->mode = SLIDING;
-	return true;
-      }
-      // There's space to jump the dot, but we'd uncover a solid if we
-      // did that.
-      printf("But covering solid\n");
-    } else {
-      // There's no space to jump over the dot.
-      printf("No space past dot\n");
-
-      if (B + 1 == MAX) {
-	// This block is at its right-most position.
-	printf("Right block is right-most for dot\n");
-	if (MAX == BASE) {
-	  printf("Fixing final block\n");
-	  return false;
-	}
-	MAX--;
-	ctxt->maxpos = POS(B) - 1;
-      }
-    }
-    // Finished handling an obstructive dot.
-  }
-  // Either there was no dot, or we failed to jump over it.
-
-  printf("Limit reached; %zu blocks left\n", B - BASE);
-
-  // We can't go any further for the moment.  Try sliding a previous
-  // block.
-  if (B > BASE) {
-    B--;
-    return true;
-  }
-  // This is the left-most block that hasn't been fixed.
-
-  // Now go to the right-most block that hasn't been fixed, and try to
-  // get an earlier block to cover it.
-  if (MAX <= BASE) {
-    // All blocks have been fixed from the right.  Stop here.
-    printf("All blocks fixed\n");
-    return false;
-  }
-
-  assert(MAX > 0);
-  B = MAX - 1;
-
-  // Skip blocks which don't cover solids.
-  while (B > BASE && SOLID(B) >= RULE(B))
-    B--;
-
-  if (SOLID(B) >= RULE(B)) {
-    // We ran out of blocks, so it must be the end.
-    return false;
-  }
-
-  // Pull a block up to cover this one's solid.
-  ctxt->target = B;
-  ctxt->mode = DRAWING;
-  return true;
-}
-
-static int step_restoring(void *vp, void *ws)
-{
-  const struct nonogram_initargs *a = ws;
-  CONTEXT(RULES) *ctxt = ws;
-
-  assert(B < RULES);
-  assert(B < MAX);
-
-  // Restore all blocks to their last valid positions, and find the
-  // left-most of them that covers a solid - this will be the target
-  // for drawing the next block up.
-  ctxt->target = RULES;
-  for (size_t j = MININV; j <= B; j++) {
-    size_t i = B + MININV - j;
-    printf("Restoring %zu from %" nonogram_PRIuSIZE
-	   " to %" nonogram_PRIuSIZE "\n", i,
-	   POS(i), OLDPOS(i));
-    POS(i) = OLDPOS(i);
-    SOLID(i) = OLDSOLID(i);
-    if (SOLID(i) < RULE(i))
-      ctxt->target = i;
-  }
-
-#if 0
-  if (B + 1 == MAX) {
-    printf("Blocks %zu to %zu fixed\n", MININV, B);
-    MAX = MININV;
-    ctxt->maxpos = POS(MAX) - 1;
-  }
-#endif
-
-  B = MININV;
-  MININV = RULES;
-  if (B > MAX)
-    B = MAX;
-  printf("Returned to block %zu\n", B);
-
-  if (ctxt->target >= RULES) {
-    // Find a block from this position that covers a solid.
-    while (B > BASE && SOLID(B) >= RULE(B))
-      B--;
-
-    if (SOLID(B) >= RULE(B)) {
-      // There's no such block.
-      printf("No block on left covers solid\n");
-      return false;
-    }
-    ctxt->target = B;
-  }
-
-  // Now try drawing up an earlier block.
-  ctxt->mode = DRAWING;
-  return true;
-}
+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
+YqOFxHQirfU56PINcvXCUw==

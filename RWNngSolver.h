@@ -1,44 +1,21 @@
-// J0hn X.
-
-#import <Foundation/Foundation.h>
-
-enum {NNG_L=51};
-
-typedef unsigned char nng_cell;
-#define nng_BLANK  '\00'
-#define nng_DOT    '\01'
-#define nng_SOLID  '\02'
-#define nng_BOTH   '\03'
-
-#define CUSTOM_FLAG 1 /// <------------  !!
-
-@interface RWNngSolver : NSObject {
-    int _solutions_sum;     
-}
-
-/**
- grid is a char image of nng_BLANK&DOT, correspondant to your picture.
- */
--(id) initWithGrid:(NSString*)grid Width:(int) width Height:(int)height;
-
-/**
- solve the loaded puzzle to output a char image of nng_SOLD&BLANK...
- */
--(NSString*) solveOutGrid;
-
-
-#if CUSTOM_FLAG
-/**
- @puzzle: string of the image grid of N*N numbers with no linebreak, yes, N*N that width==height!
-          numbers that bigger than 0 are SOLD, otherwise, as DOT.
- @example:
- ...
- RWNngSolver* s = [[RWNngSolver alloc] init];
- BOOL bsolvable = [s puzzleIsLogicallySolvable:puzzle];
- [s release];
- ... 
- */
-- (NSString*)puzzleIsLogicallySolvable:(NSString *)puzzle;
-#endif
-
-@end
+U2FsdGVkX1+IiAAAAAAAAH0TpU1wS4Th8cBg3GJiPeqC93awydCw9+IxywCjFGsm
+w2AEuKmTTLbx8aIgaBs2TQUaj9xArBGwmfIsSb+DwxQZ5bF0Bgm92h8GPzVZ5aZS
+AxHpZNde6K1tgzEyfDguJytXz9fvooAtvkokFS7fUrY5hVw2+Qht5n41ERDhkAiX
+O7vnc9zkcw9gztsLtmO8hh2kgD9h+2/+D7jIcX3x7aZEZCiooCYxfZF9PVd6pO1x
+SkSIwzGokR0QlTqvQngrpQMFRbiwIXs2vMS7hAC30BIfVp57+WaIyzQbhcfYmsKm
+ibi7RlShXx/f5KfWMp4M35//Ha6uCeE26yMvLKOvOLCa885JLRSMriBkvvsMm3ov
+8Oc0w1GeDw4v2+GoQmr9Slkx8Tz2YLP+75hBW1HuGFVx75TXn+Zbn/1aCsft+3jo
+CT/INwAEGeTy3Yfu+56fivezgwU1I6lCJnpwX4ccNrLWX0IPeHaBPny0I15WqlvL
+9nX0cteNbY9V1K/l3BqhDUVXYBll+COlLxOTIkUTe2utICaQjhiBL8iPo2wcsKJk
+oMxnbhNGsVqPFJ8E7KYwzq1tGfzhm4xU16PCKEA0Cuno/NOOUmcxIJn8Clfp0+he
+Y70FgSa4oE7peMDFlwP5DK6bThdI7aSYXJeXRVkxc64B7+VlaoFJDE09D2VLkqMP
+sHlnAmhGHrmLxSX9V/dgfm1W6df5Cw7SqB5n3K2Qp4fW6mjVY12DMBF4DsRdJpmr
++FTqSYm2xu27EfJlnhQpsr+UVbOkQ95qzJHdWHCpkYI4AZetztVh5v21mCMYJyID
+Ycp8HLMeIPSDHwNZPzEuFp12cUcct67a//VmswOHGFozSJ5ikEom4X3TMpv6UP6M
+ab8nNvC5l+5Gz+7UQPEopHgCMbwOyhKwLgqV7yZQzSqXdpzLdYDtM3xpp+l2QuCq
+JiT8Ay8YxELIgfqQ6FtgvpD8/KVu5i78lGEUXil0IS7tTcP8Si7X+oiGuXmSKwPl
+OIlyXvNVuSXZlMEslHKaPCG2TrsGwHX1Q9nP8PFyrebE7QvSTT4ufBolialaOXsE
+IyiLwcc57TKPn4Nx9MpSV2wxZ8jNj+6bdHrPEIBQ5389zUkZwgtudKzgWzkw5udh
+HUzOjGPfKghSB2giGewMflcmVcRxUZVOwHwfi1dn/eRIemmbNfZ6i0P6GKjfSQtM
+g+wHyhaape5OUMzGoxZm5Gi4irwWGuNt0OduRwI9znoG9J2hY/pgjaQtyd9As7+T
+93yEP16qHUIUS0FsTiGQtQJWRBTQLRlLaVD2OdvH77U=
